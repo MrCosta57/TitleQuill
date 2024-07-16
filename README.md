@@ -1,1 +1,3 @@
 # TitleQuill
+
+pip install -e .
