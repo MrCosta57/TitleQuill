@@ -61,6 +61,9 @@ class OAGKXDownloader:
 
         with open(file_path, 'wb') as f:
             
+            self._logger.info(mess=f"Downloading from {self.URL}")
+
+            
             # Use tqdm to show download progress
             with tqdm(total=total_size, unit='iB', unit_scale=True) as t:
                 
@@ -71,24 +74,24 @@ class OAGKXDownloader:
         
         self._logger.info(mess=f"Downloaded {filename} to {self._target_dir}")
 
-        # If the file is a ZIP archive, unzip it
-        if zipfile.is_zipfile(file_path):
-                        
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
                 
-                total_files = len(zip_ref.namelist())
-                extracted_files = 0
-                
-                for file in tqdm(zip_ref.namelist(), total=total_files, unit='file'):
-                    
+            # Assuming `zip_ref` is your zipfile.ZipFile object and `self._target_dir` is your target directory
+            total_files = len(zip_ref.namelist())
+            extracted_files = 0
+            
+            self._logger.info(mess=f"Unzipping {total_files} files...")
+
+            with tqdm(total=total_files, unit='file') as pbar:
+                for file in zip_ref.namelist():
                     zip_ref.extract(file, self._target_dir)
                     extracted_files += 1
-                    tqdm.write(f"Extracted {extracted_files}/{total_files} files")
-            
-            self._logger.info(mess=f"Unzipped {filename} in {self._target_dir}")
+                    pbar.update(1)
+                    pbar.set_postfix(extracted=f"{extracted_files}/{total_files}")
+
         
-        else:
-            self._logger.warn(mess=f"{filename} is not a zip file.")
+        self._logger.info(mess=f"Unzipped {filename} in {self._target_dir}")
+        
 
 
 @dataclass
