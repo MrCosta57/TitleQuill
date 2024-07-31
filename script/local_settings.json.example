@@ -1,6 +1,0 @@
-// 1. Change file extension removing *.example
-// 2. Change file paths to your local ones
-// 3. Remove these trailing comments
-{
-    data_dir = "path/to/your/data_dir"
-}
