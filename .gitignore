@@ -165,3 +165,6 @@ data/*
 # Local settings
 *local_settings*
 !*.example
+
+# Ide
+.vscode/
