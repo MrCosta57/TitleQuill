@@ -1,0 +1,6 @@
+// 1. Copy file and change extension removing *.example
+// 2. Change file paths to your local ones
+// 3. Remove these trailing comments
+{
+    dataset_dir = "path/to/your/data_dir"
+}
