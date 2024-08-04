@@ -2,5 +2,6 @@
 // 2. Change file paths to your local ones
 // 3. Remove these trailing comments
 {
-    dataset_dir = "path/to/your/data_dir"
+    dataset_dir   = "path/to/your/dataset_dir",
+    dataset_tsv_fp = "path/to/your/tsv_file"
 }
