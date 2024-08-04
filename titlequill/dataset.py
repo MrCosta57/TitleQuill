@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 import re
 import csv
 import os
@@ -165,7 +165,7 @@ class OAGKXItem:
             'keywords' : self._KEYWORDS_DELIMITER.join(self.keywords) 
         }
 
-class _OAGKXDataset(Dataset, ABC):
+class OAGKXDataset(Dataset, ABC):
     '''
     Abstract class to define the interface for the OAGKX dataset loaders.
     
@@ -176,6 +176,7 @@ class _OAGKXDataset(Dataset, ABC):
     
     # --- ABSTRACT METHODS ---
     
+    @abstractmethod
     def __getitem__(self, idx: int) -> OAGKXItem:
         
         raise NotImplementedError("Cannot instantiate the abstract class `_OACGXDataset`")
@@ -221,7 +222,7 @@ class _OAGKXDataset(Dataset, ABC):
         return list_of_dict_to_dict_of_list([el.item for el in batch])
 
 
-class OAGKXRawDataset(_OAGKXDataset):
+class OAGKXRawDataset(OAGKXDataset):
     '''
     Class to load the RawOAGKX dataset from the disk and provide an iterable interface to access the items.
     
@@ -506,7 +507,7 @@ class OAGKXRawDataset(_OAGKXDataset):
         return OAGKXTSVDataset(file_path=file_path)
 
 
-class OAGKXTSVDataset(_OAGKXDataset):
+class OAGKXTSVDataset(OAGKXDataset):
     ''' 
     Class to deal with OAGKXTS dataset transposed TSV format, suitable for lazy loading.
     It implements STUBS to HuggingFace Dataset API (see https://huggingface.co/docs/datasets/index)

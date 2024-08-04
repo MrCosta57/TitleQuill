@@ -12,3 +12,4 @@ LOCAL_SETTINGS    = load_json(LOCAL_SETTINGS_FP)
 # Local paths
 DATASET_DIR      = LOCAL_SETTINGS["dataset_dir"]
 DATASET_TSV_FILE = LOCAL_SETTINGS["dataset_tsv_fp"]
+OUT_DIR          = LOCAL_SETTINGS["out_dir"]

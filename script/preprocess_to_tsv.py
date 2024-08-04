@@ -4,7 +4,11 @@ from titlequill.dataset import OAGKXRawDataset, OAGKXItem
 from titlequill.utils.logger import Logger
 from script.utils.settings import DATASET_DIR, DATASET_TSV_FILE
 
-def all_keywords_in_abstract(item: OAGKXItem) -> bool: return all([kw in item.abstract for kw in item.keywords])
+def all_keywords_in_abstract(item: OAGKXItem) -> bool: 
+    ''' Check if all keywords are in the abstract '''
+    
+    # NOTE: The first condition is to avoid the case of empty keywords
+    return item.keywords and all([kw in item.abstract for kw in item.keywords])
 
 def main():
     

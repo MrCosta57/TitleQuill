@@ -1,7 +1,17 @@
 import json
+import os
 import platform
 import subprocess
 from typing import Dict, List
+    
+from titlequill.utils.logger import Logger, SilentLogger
+
+def make_dir(path: str, logger: Logger = SilentLogger()) -> str:
+    
+    logger.info(f'Creating directory: {path}')
+    os.makedirs(path, exist_ok=True)
+    
+    return path
 
 
 def read_file_lines(file_path: str) -> List[str]:
