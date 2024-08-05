@@ -20,7 +20,7 @@ from titlequill.utils.logger import Logger, SilentLogger
 from titlequill.utils.misc   import list_of_dict_to_dict_of_list
 
 # Type Alias
-IdxMapping = Dict[int, int]
+FilterMapping = Dict[int, int]
 FileKey    = Tuple[int, int]
 Interval   = Tuple[int, int]
 
@@ -271,6 +271,8 @@ class OAGKXRawDataset(OAGKXDataset):
     It also provides a filtering mechanism to filter the items in the dataset.
     '''
     
+    EXT = 'json'
+    
     PATTERN  = r'part_(\d+)_(\d+)\.txt'
     ''' Pattern to match the file names '''
     
@@ -388,7 +390,7 @@ class OAGKXRawDataset(OAGKXDataset):
     
     def __repr__(self) -> str: return str(self)
     
-    def __len__ (self) -> int: return len(self._idx_mapping) if self.has_filter else self.tot_items
+    def __len__ (self) -> int: return len(self._filter_mapping) if self.has_filter else self.tot_items
     ''' The dataset length is the total number of items if no filtering is applied, otherwise is the number of filtered items '''
     
     def __iter__(self) -> Iterable[OAGKXItem]:
@@ -408,7 +410,7 @@ class OAGKXRawDataset(OAGKXDataset):
         
         # Use the mapping if a filter is applied
         if self.has_filter:
-            try:             idx = self._idx_mapping[idx]
+            try:             idx = self._filter_mapping[idx]
             except KeyError: raise ValueError(f"Index {idx} out of bounds")
         
         # Find the chunk key corresponding to the index and load the chunk
@@ -419,8 +421,7 @@ class OAGKXRawDataset(OAGKXDataset):
         
         # Get the left relative index in the chunk
         loaded_from, _ = self._loaded_interval
-        json_line: str = self._loaded_lines[idx - loaded_from]
-        json_item: Dict[str, Any] = json.loads(json_line)
+        json_item: Dict[str, Any] = self._loaded_dataset[idx - loaded_from]
         
         return OAGKXItem.from_json(json_item=json_item)
     
@@ -443,7 +444,7 @@ class OAGKXRawDataset(OAGKXDataset):
         
         self._loaded_idx      = key
         self._loaded_interval = interval
-        self._loaded_lines    = read_file_lines(file_path)
+        self._loaded_dataset  = load_dataset(self.EXT, data_files=file_path)['train']
     
     def _find_chunk_key(self, idx: int) -> FileKey:
         ''' 
@@ -471,8 +472,8 @@ class OAGKXRawDataset(OAGKXDataset):
     def reset_filtering(self):
         ''' Reset the filtering '''
         
-        self._idx_mapping : IdxMapping = {}; 
-        self._has_filter  : bool       = False
+        self._filter_mapping : FilterMapping = {}; 
+        self._has_filter     : bool          = False
     
     def apply_filter(self, filter: Callable[[OAGKXItem], bool]):
         ''' 
@@ -489,7 +490,7 @@ class OAGKXRawDataset(OAGKXDataset):
         self._logger.info(mess=f"Applying filter...")
         
         curr_idx    : int = 0
-        new_mapping : IdxMapping = {}
+        new_mapping : FilterMapping = {}
 
         for idx in tqdm(range(len(self))):
             
@@ -503,7 +504,7 @@ class OAGKXRawDataset(OAGKXDataset):
         
         self._logger.info(mess=f"Filter applied. {len(self)} items left")
         self._has_filter  = True
-        self._idx_mapping = new_mapping
+        self._filter_mapping = new_mapping
     
     # --- SAVING ---
 
