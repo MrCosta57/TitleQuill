@@ -153,6 +153,8 @@ class OAGKXItem:
     def __str__ (self) -> str: return  f'Title: {self.title}\n\nAbstract: {self.abstract}\n\nKeywords: {self.keywords}'
     def __repr__(self) -> str: return str(self)
     
+    # --- PROPERTIES ---
+    
     @property
     def item(self) -> Dict:
         ''' Returns the item as a dictionary for batching '''
@@ -164,6 +166,35 @@ class OAGKXItem:
             'abstract' : self.abstract,
             'keywords' : self._KEYWORDS_DELIMITER.join(self.keywords) 
         }
+    
+    
+    @property
+    def keywords_in_abstract_count(self) -> int:
+        ''' Returns the number of keywords that appear in the abstract '''
+        
+        return sum([keyword in self.abstract for keyword in self.keywords])
+    
+    @property
+    def all_keywords_in_abstract(self) -> bool:
+        ''' 
+        Returns True if all keywords are in the abstract 
+        NOTE: This is true in the case of no keywords
+        '''
+        
+        return self.keywords_in_abstract_count == len(self.keywords)
+    
+    @property
+    def x_y(self) -> Tuple[str, str]:
+        ''' 
+        Returns the pair (x, y) for the training of the model, where
+            - x is the abstract
+            - y is the title and the keywords
+        '''
+        
+        x = self.abstract
+        y = f'Title: {self.title}. Keywords: {self._KEYWORDS_DELIMITER.join(self.keywords)}'
+        
+        return x, y
 
 class OAGKXDataset(Dataset, ABC):
     '''
@@ -219,7 +250,15 @@ class OAGKXDataset(Dataset, ABC):
     def default_collate_fn(batch: List[OAGKXItem]) -> Dict:
         ''' Extract the items in a dictionary-like format suitable for batching '''
         
-        return list_of_dict_to_dict_of_list([el.item for el in batch])
+        out = {'x': [], 'y': []}
+        
+        for el in batch:
+            x, y = el.x_y
+            out['x'].append(x)
+            out['y'].append(y)
+        
+        return out
+        #return list_of_dict_to_dict_of_list([el.item for el in batch])
 
 
 class OAGKXRawDataset(OAGKXDataset):

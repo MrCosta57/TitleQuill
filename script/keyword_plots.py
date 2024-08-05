@@ -143,7 +143,7 @@ class OAGKXStats:
         ''' Update the statistics with a new item '''
         
         keywords_n      = len(item.keywords)
-        in_abstract     = sum([kw in item.abstract for kw in item.keywords])
+        in_abstract     = item.keywords_in_abstract_count
         in_abstract_prc = in_abstract / keywords_n
         
         self._keywords_count          [keywords_n]      += 1

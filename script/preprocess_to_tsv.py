@@ -8,7 +8,7 @@ def all_keywords_in_abstract(item: OAGKXItem) -> bool:
     ''' Check if all keywords are in the abstract '''
     
     # NOTE: The first condition is to avoid the case of empty keywords
-    return item.keywords and all([kw in item.abstract for kw in item.keywords])
+    return item.keywords and item.all_keywords_in_abstract
 
 def main():
     
