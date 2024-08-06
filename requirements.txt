@@ -1,0 +1,3 @@
+# Make sure to have torch>=2.0 installed
+transformers
+datasets
