@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - data: oagkx
+
+old_ext: "txt"
+new_ext: "jsonl"
