@@ -2,10 +2,13 @@ import os
 from urllib.parse import urlparse
 import zipfile
 import logging
+from logging import Logger
 from omegaconf import DictConfig
 from tqdm import tqdm
 import requests
 import hydra
+
+from src.utils.io_ import make_dir
 
 
 class Downloader:
@@ -14,8 +17,8 @@ class Downloader:
     def __init__(
         self,
         target_dir: str,
-        URL: str = "https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y",
-        logger: logging.Logger | None = None,
+        URL       : str    = "https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y",
+        logger    : Logger = logging.getLogger(__name__),
     ):
         """
         Initialize the downloader
@@ -27,15 +30,13 @@ class Downloader:
         :raises ValueError: If the target directory is invalid
         """
 
-        # Check if the target directory exists
-        if not os.path.exists(target_dir):
-            raise ValueError(f"Invalid path: {target_dir}")
+        # Create the target directory if it does not exist
+        make_dir(dir_path=target_dir, logger=logger)
 
-        self.URL = URL
-        self._target_dir: str = target_dir
-        self._logger: logging.Logger = (
-            logging.getLogger(__name__) if logger is None else logger
-        )
+        self.URL : str = URL
+        self._target_dir : str = target_dir
+        self._logger : Logger = logger
+    
 
     # --- MAGIC METHODS ---
 
