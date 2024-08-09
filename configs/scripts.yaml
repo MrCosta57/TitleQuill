@@ -3,6 +3,8 @@
 defaults:
   - _self_
   - data: oagkx
+  - hydra: default
+
 
 old_ext: "txt"
 new_ext: "jsonl"
