@@ -1,5 +1,6 @@
 tqdm
 datasets
 transformers
+accelerate
 matplotlib==3.8.4
 hydra-core==1.3

@@ -8,8 +8,6 @@ from tqdm import tqdm
 import requests
 import hydra
 
-from src.utils.io_ import make_dir
-
 
 class Downloader:
     """Downloads the OAGKX dataset from the LINDAT repository"""
@@ -17,8 +15,8 @@ class Downloader:
     def __init__(
         self,
         target_dir: str,
-        URL       : str    = "https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y",
-        logger    : Logger = logging.getLogger(__name__),
+        URL: str = "https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y",
+        logger: Logger = logging.getLogger(__name__),
     ):
         """
         Initialize the downloader
@@ -29,14 +27,13 @@ class Downloader:
         :type logger: Logger, optional
         :raises ValueError: If the target directory is invalid
         """
+        self.URL: str = URL
+        self._target_dir: str = target_dir
+        self._logger: Logger = logger
 
         # Create the target directory if it does not exist
-        make_dir(dir_path=target_dir, logger=logger)
-
-        self.URL : str = URL
-        self._target_dir : str = target_dir
-        self._logger : Logger = logger
-    
+        os.makedirs(name=target_dir, exist_ok=True)
+        # self._logger.info(f"Creating directory {target_dir}")
 
     # --- MAGIC METHODS ---
 
