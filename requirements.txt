@@ -1,4 +1,5 @@
 tqdm
+evaluate
 datasets
 transformers
 accelerate
