@@ -32,6 +32,11 @@ pip install -r requirements.txt
 
 ## How to run
 
+```bash
+python scripts/download_files.py
+python scripts/preprocess_files.py
+```
+
 Train model with default configuration
 
 ```bash
