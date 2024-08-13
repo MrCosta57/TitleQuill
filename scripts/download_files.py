@@ -91,6 +91,8 @@ class Downloader:
                     pbar.set_postfix(extracted=f"{extracted_files}/{total_files}")
 
         self._logger.info(f"Unzipped {filename} in {self._target_dir}")
+        os.remove(file_path)
+        self._logger.info(f"Removed {filename}")
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="scripts")
