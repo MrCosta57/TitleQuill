@@ -32,9 +32,14 @@ def training_loop(model, tokenizer, dataset, num_epochs, device):
             # print([f"{k}: {v.shape}" for k, v in batch.items()])
             batch = {k: v.to(device) for k, v in batch.items()}
             # Forward pass
-            outputs = model(**batch)
-            loss = outputs.loss
 
+            outputs = model(**batch)
+            logits = outputs.logits # 2, N, 32128
+
+            labels = batch['labels'] # 2, N
+            batched_logits = logits.view(torch.prod(torch.tensor(logits.shape[:2])), -1)
+            batched_labels = labels.view(-1)
+            loss = torch.nn.CrossEntropyLoss()(batched_logits,batched_labels)
             print(f"Loss: {loss.item()}")
             # Backward pass
             optimizer.zero_grad()
@@ -76,7 +81,7 @@ def main():
     num_epochs = 1
     # model_type = "Qwen/Qwen2-0.5B-Instruct"
     model_type = "google/flan-t5-small"
-    data_dir = "data/OAGKX"
+    data_dir = "data/OAGKX/oagkx"
     seed_everything(123)
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
