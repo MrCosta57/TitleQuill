@@ -21,14 +21,16 @@ def load_oagkx_dataset(
     """Load OAG-KX dataset from jsonl files with filtering and streaming support."""
 
     # Load dataset
-    # data_files = glob.glob(path.join(data_dir, "*.jsonl"))
+    #data_files = glob.glob(path.join(data_dir, "*.jsonl"))
     data_files = glob.glob(path.join(data_dir, "part_0.jsonl"))
     dataset = load_dataset("json", data_files=data_files, split=split, streaming=False)
+    
     # Apply filter function
     if filter_fn:
         dataset = dataset.filter(filter_fn, batched=True)
 
     dataset_split = dataset.train_test_split(test_size=test_size)
+    
     # Wrap the split datasets in a DatasetDict
     dataset_dict = DatasetDict(
         {"train": dataset_split["train"], "test": dataset_split["test"]}

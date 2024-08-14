@@ -3,7 +3,6 @@ from os import path
 from typing import Any, Callable, Dict, List, Tuple
 from functools import partial
 
-
 import numpy as np
 import torch
 from torch import Tensor
@@ -14,49 +13,59 @@ from transformers import (
     PreTrainedTokenizerBase,
     DataCollatorForSeq2Seq,
 )
-from datamodule.dataset import load_oagkx_dataset, filter_no_keywords
+from src.datamodule.dataset import apply_tokenization, load_oagkx_dataset, filter_no_keywords
 
-# Type alias
-Args = Dict[str, Any]  # {'batch_size': 32, 'lr': 0.001, ...}
-Batch = Dict[
-    str, Tensor
-]  # {'input_ids': tensor([[1, 2, 3, ...]]), 'attention_mask': tensor([[1, 1, 1, ...]]), ...}
-DatasetItem = Dict[
-    str, str
-]  # {'abstract': 'in this paper...', 'title': 'let's cure the cancer', ...}
-ModelOut = Dict[str, Any]  # {'logits': tensor([[1, 2, 3, ...]]), ...}
+# --- TYPE ALIASES ---
+
+Args = Dict[str, Any]  # Example: {'batch_size': 32, 'lr': 0.001, ...}
+''' Keyword arguments for a generic function call. '''
+
+DatasetItem = Dict[str, str] # Example: {'abstract': 'in this paper...', 'title': 'let's cure the cancer', ...}
+''' A single item in the dataset with keys {`abstract`, `title`, `keywords`} mapped to strings. '''
+
+Batch = Dict[str, Tensor]  # Example: {'input_ids': tensor([[1, 2, 3, ...]]), 'attention_mask': tensor([[1, 1, 1, ...]]), ...}
+''' A batch of data with keys mapped to PyTorch tensors. '''
+
+ModelOut = Dict[str, Any]  # Example: {'logits': tensor([[1, 2, 3, ...]]), ...}
+''' The output of the model call in the forward step. '''
 
 
 def collate_function_with_preprocessing(
-    items: List[Dict[str, Any]],
-    input_labels_fn: Callable[[List[Dict[str, Any]]], Tuple[List[str], List[str]]],
+    items: List[DatasetItem],
+    input_labels_fn: Callable[[List[DatasetItem]], Tuple[List[str], List[str]]],
     tokenizer: PreTrainedTokenizerBase,
     tokenizer_input_args: Dict[str, Any] = {},
     tokenizer_target_args: Dict[str, Any] = {},
-    data_collator: DataCollatorForSeq2Seq = None,
+    data_collator: DataCollatorForSeq2Seq | None = None,
 ) -> Dict[str, torch.Tensor]:
     """
     Collate function to perform custom preprocessing on the batch before passing it to the standard Seq2Seq collate function.
+    
+    It leverage on a callback returning the inputs and labels from the dataset items and applies tokenization to them.
     """
 
     # Get inputs and labels from items
     inputs, labels = input_labels_fn(items)
 
     # Tokenize inputs and labels
-    batch = tokenization(
-        inputs=inputs,
-        labels=labels,
+    batch = apply_tokenization(
+        input_str=inputs,
+        label_str=labels,
         tokenizer=tokenizer,
         tokenizer_input_args=tokenizer_input_args,
         tokenizer_label_args=tokenizer_target_args,
     )
+    
+    # TODO : which version is more efficient ? 
+    # Postprocess the batch to a list of dictionaries
+    # batch_dict_list = [{k: v[i] for k, v in batch.items()} for i in range(len(batch["input_ids"]))]
 
     # Initialize DataCollatorForSeq2Seq only if not provided
     if data_collator is None:
         data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
 
     # Apply the data collator
-    return data_collator(batch)
+    return data_collator(batch_dict_list)
 
 
 def get_collate_function_with_preprocessing(
