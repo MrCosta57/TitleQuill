@@ -5,6 +5,7 @@ import hydra
 from omegaconf import DictConfig
 
 
+# TODO - The preprocessing is moved after the download. Can we delete this file?
 def fix_filenames(directory: str, old_ext: str, new_ext: str):
 
     print(f"Old extension: {old_ext}")
