@@ -19,7 +19,7 @@ What it does
 
 ```bash
 # [OPTIONAL] create conda environment
-conda create -n myenv python=3.9
+conda create -n myenv python=3.11
 conda activate myenv
 
 # install pytorch according to instructions
@@ -29,12 +29,28 @@ conda activate myenv
 pip install -r requirements.txt
 ```
 
+## Download data
+
+```bash
+python src/datamodule/download.py
+```
+
+<details>
+<summary><span style="font-weight: bold;">Command Line Arguments for download.py</span></summary>
+#### --data_dir
+Directory to save the dataset
+#### --url
+URL to download the dataset
+#### --old_ext_postproc
+Old extension of the files to postprocess
+#### --new_ext_postproc
+New extension of the files to postprocess
+</details>
 
 ## How to run
 
 ```bash
-python scripts/download_files.py
-python scripts/preprocess_files.py
+python src/train.py
 ```
 
 Train model with default configuration

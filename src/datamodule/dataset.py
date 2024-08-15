@@ -14,26 +14,39 @@ def filter_no_keywords(batch: Dict[str, List[str]]) -> List[bool]:
 
 def load_oagkx_dataset(
     data_dir: str,
-    split: str = "train",
+    val_size: float = 0.1,
     test_size: float = 0.2,
+    just_one_file: bool = False,
     filter_fn: Callable[[Dict[str, List[str]]], List[bool]] | None = None,
 ) -> DatasetDict:
-    """Load OAG-KX dataset from jsonl files with filtering and streaming support."""
+    """Load OAGKX dataset from jsonl files with filtering"""
 
+    print(f"Loading dataset from {data_dir} ...")
     # Load dataset
-    #data_files = glob.glob(path.join(data_dir, "*.jsonl"))
-    data_files = glob.glob(path.join(data_dir, "part_0.jsonl"))
-    dataset = load_dataset("json", data_files=data_files, split=split, streaming=False)
-    
+    data_files = (
+        glob.glob(path.join(data_dir, "part_0.jsonl"))
+        if just_one_file
+        else glob.glob(path.join(data_dir, "*.jsonl"))
+    )
+    dataset = load_dataset(
+        "json", data_files=data_files, split="train", streaming=False
+    )
+    print(f"Dataset loaded with {len(dataset)} samples.")
+
     # Apply filter function
     if filter_fn:
         dataset = dataset.filter(filter_fn, batched=True)
 
-    dataset_split = dataset.train_test_split(test_size=test_size)
-    
+    train_test_ds = dataset.train_test_split(test_size=test_size)
+    train_val_ds = train_test_ds["train"].train_test_split(test_size=val_size)
+
     # Wrap the split datasets in a DatasetDict
     dataset_dict = DatasetDict(
-        {"train": dataset_split["train"], "test": dataset_split["test"]}
+        {
+            "train": train_val_ds["train"],
+            "validation": train_val_ds["test"],
+            "test": train_test_ds["test"],
+        }
     )
 
     return dataset_dict
@@ -47,10 +60,6 @@ def apply_tokenization(
     tokenizer_label_args: Dict[str, Any] = {},
 ):
     """Perform tokenization on inputs and labels."""
-
-    # Check if inputs and labels have the same length
-    # assert len(inputs) == len(labels), "Inputs and labels must have the same length"
-
     # Tokenize inputs and labels
     model_inputs = tokenizer(input_str, **tokenizer_input_args)
     label_encodings = tokenizer(label_str, **tokenizer_label_args)
@@ -93,20 +102,18 @@ def custom_collate_seq2seq_2task(
 ):
     # batch is a list of dataset items
     new_row = [
-        (
-            apply_tokenization(
-                input_format1.format(e=item["abstract"]),
-                output_format1.format(t=item["title"]),
-                tokenizer,
-            )
-            if i % 2 == 0
-            else apply_tokenization(
-                input_format2.format(e=item["abstract"]),
-                output_format2.format(k=item["keywords"]),
-                tokenizer,
-            )
+        apply_tokenization(
+            input_format1.format(e=item["abstract"]),
+            output_format1.format(t=item["title"]),
+            tokenizer,
         )
-        for i in range(2)
+        for item in batch
+    ] + [
+        apply_tokenization(
+            input_format2.format(e=item["abstract"]),
+            output_format2.format(k=item["keywords"]),
+            tokenizer,
+        )
         for item in batch
     ]
     default_collator = DataCollatorForSeq2Seq(

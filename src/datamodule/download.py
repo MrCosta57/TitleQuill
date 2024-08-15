@@ -7,7 +7,7 @@ from logging import Logger
 from omegaconf import DictConfig
 from tqdm import tqdm
 import requests
-import hydra
+import argparse
 
 
 class Downloader:
@@ -17,32 +17,20 @@ class Downloader:
 
     def __init__(
         self,
+        url: str,
         target_dir: str,
-        URL: str,
+        unzip: bool = True,
         logger: Logger = logging.getLogger(__name__),
     ):
-        """
-        Initialize the downloader
-
-        :param target_dir: Directory to save the dataset
-        :type target_dir: str
-        :param URL: URL to download the dataset from
-        :type URL: str
-        :param logger: Logger to log i/o operations, defaults to SilentLogger()
-        :type logger: Logger, optional
-        :raises ValueError: If the target directory is invalid
-        """
-        
-        self.URL: str = URL
-        self._target_dir: str = target_dir
-        self._logger: Logger = logger
+        self.URL = url
+        self._target_dir = target_dir
+        self._unzip = unzip
+        self._logger = logger
 
         # Create the target directory if it does not exist
         if not os.path.exists(target_dir):
             self._logger.info(f"Creating directory {target_dir}")
             os.makedirs(name=target_dir, exist_ok=True)
-
-    # --- MAGIC METHODS ---
 
     def __str__(self) -> str:
         return f"Downloader[target_dir={self._target_dir}]"
@@ -50,8 +38,6 @@ class Downloader:
     def __repr__(self) -> str:
         return str(self)
 
-    # --- DOWNLOAD METHODS ---
-    
     def download(self):
         """
         Downloads the dataset from the URL.
@@ -69,9 +55,7 @@ class Downloader:
 
         # Downloading
         with open(zip_file, "wb") as f:
-
             self._logger.info(f"Downloading from {self.URL}")
-
             # Use tqdm to show download progress
             with tqdm(total=total_size, unit="iB", unit_scale=True) as t:
 
@@ -79,67 +63,47 @@ class Downloader:
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
                         t.update(len(chunk))
-
         self._logger.info(f"Downloaded {filename} to {self._target_dir}")
-        
-        # Unzip the file
-        with zipfile.ZipFile(zip_file, "r") as zip_ref:
 
-            # Assuming `zip_ref` is your zipfile.ZipFile object
-            # and `self._target_dir` is your target directory
-            total_files = len(zip_ref.namelist())
-            extracted_files = 0
+        if self._unzip:
+            with zipfile.ZipFile(zip_file, "r") as zip_ref:
+                # Assuming `zip_ref` is your zipfile.ZipFile object
+                # and `self._target_dir` is your target directory
+                total_files = len(zip_ref.namelist())
+                extracted_files = 0
 
-            self._logger.info(f"Unzipping {total_files} files...")
+                self._logger.info(f"Unzipping {total_files} files...")
+                with tqdm(total=total_files, unit="file") as pbar:
+                    for file in zip_ref.namelist():
+                        zip_ref.extract(file, self._target_dir)
+                        extracted_files += 1
+                        pbar.update(1)
+                        pbar.set_postfix(extracted=f"{extracted_files}/{total_files}")
+            self._logger.info(f"Unzipped {filename} in {self._target_dir}")
+            # Remove the zip file
+            os.remove(zip_file)
+            self._logger.info(f"Removed {filename}")
 
-            with tqdm(total=total_files, unit="file") as pbar:
-                for file in zip_ref.namelist():
-                    zip_ref.extract(file, self._target_dir)
-                    extracted_files += 1
-                    pbar.update(1)
-                    pbar.set_postfix(extracted=f"{extracted_files}/{total_files}")
-
-        self._logger.info(f"Unzipped {filename} in {self._target_dir}")
-        
-        # Remove the zip file
-        os.remove(zip_file)
-        self._logger.info(f"Removed {filename}")
-    
-    def preprocess(self):
-        """
-        Preprocess the downloaded files
-        By default, no processing is done.
-        """
-        
-        pass
 
 class OAGKXDownloader(Downloader):
     """
-    Class to download the OAGKX dataset from the LINDAT repository
-        and preprocess the files to have the correct extension and a single numeric indexing.
+    Class to download the OAGKX dataset and postprocess the files to have the correct extension and a single numeric indexing.
     """
-    
+
     def __init__(
-        self, 
+        self,
+        url: str,
         target_dir: str,
-        logger: Logger = logging.getLogger(__name__),        
+        unzip: bool = True,
+        logger: Logger = logging.getLogger(__name__),
     ):
-    
-        URL = "https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y"
-    
-        super().__init__(target_dir=target_dir, URL=URL, logger=logger)
-    
+        super().__init__(url, target_dir, unzip, logger)
+
     def __str__(self) -> str:
-        
-        return f'OAGKX{super().__str__()}'
-    
-    def preprocess(self):
-        
-        # TODO: Should we pass these argument from main as we did in `preprocess_files.py`?
-        old_ext = 'txt'
-        new_ext = 'jsonl'
-        
-        self._logger.info(msg="Preprocessing files...")
+        return f"OAGKX{super().__str__()}"
+
+    def postprocess(self, old_ext: str = "txt", new_ext: str = "jsonl"):
+        self._logger.info(msg="Postprocessing files...")
         self._logger.info(msg=f" > Old extension: {old_ext}")
         self._logger.info(msg=f" > New extension: {new_ext}")
         self._logger.info(msg=f" > Search directory: {self._target_dir}")
@@ -148,38 +112,61 @@ class OAGKXDownloader(Downloader):
         files = glob.glob(os.path.join(self._target_dir, f"*.{old_ext}"))
         files.sort()
         self._logger.info(msg=f"Found {len(files)} new files")
-        
+
         # Get all files with the new extension in the target directory
         pre_files = glob.glob(os.path.join(self._target_dir, f"*.{new_ext}"))
         self._logger.info(msg=f"Found {len(pre_files)} old files")
 
         # Create files with the new extension and format name
         for i, old_filename in enumerate(files, start=len(pre_files)):
-            
             # Generate a new name and extension
             new_base_name = f"part_{i}.{new_ext}"
-            
             # Construct the full new file path
             new_filename = os.path.join(self._target_dir, new_base_name)
-
             # Rename the file
             os.rename(old_filename, new_filename)
             self._logger.info(msg=f"Renamed: {old_filename} -> {new_filename}")
 
         self._logger.info(msg="Done!")
 
-@hydra.main(version_base="1.3", config_path="../configs", config_name="scripts")
-def main(cfg: DictConfig):
-    
+
+def main(args: argparse.Namespace):
+
     # Set up logging
     logging.basicConfig(level=logging.INFO)
-    
+
     # Download the dataset
-    downloader = OAGKXDownloader(target_dir=cfg.data.data_dir)
+    downloader = OAGKXDownloader(url=args.url, target_dir=args.data_dir)
     downloader.download()
-    
     # Preprocess the files
-    downloader.preprocess()
+    downloader.postprocess(old_ext=args.old_ext_postproc, new_ext=args.new_ext_postproc)
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="data/OAGKX",
+        help="Directory to save the dataset",
+    )
+    parser.add_argument(
+        "--url",
+        type=str,
+        default="https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y",
+        help="URL to download the dataset",
+    )
+    parser.add_argument(
+        "--old_ext_postproc",
+        type=str,
+        default="txt",
+        help="Old extension of the files to postprocess",
+    )
+    parser.add_argument(
+        "--new_ext_postproc",
+        type=str,
+        default="jsonl",
+        help="New extension of the files to postprocess",
+    )
+    args = parser.parse_args()
+    main(args)
