@@ -81,12 +81,13 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
 
-                #if i % self.log_interval == 0:
+                # if i % self.log_interval == 0:
                 #    self.print_eval(batch, outputs)
                 if i == 100:
                     break
 
-                self.validation()
+            self.validation()
+
         print("Training completed")
 
     @torch.no_grad()
@@ -104,6 +105,7 @@ class Trainer:
             shuffle=False,
         )
 
+        print("Starting validation...")
         for i, batch in enumerate(val_dataloader):
             batch = {k: v.to(self.device) for k, v in batch.items()}
             generated_tokens = self.model.generate(
@@ -112,14 +114,6 @@ class Trainer:
                 max_new_tokens=self.max_new_tokens,
             )
             labels = batch["labels"]
-
-            """ generated_tokens = pad_tensor(
-                generated_tokens, pad_token_id=self.tokenizer.pad_token_id
-            )
-            # If we did not pad to max length, we need to pad the labels too
-            labels = pad_tensor(labels, self.tokenizer.pad_token_id)
-            generated_tokens = generated_tokens.cpu().numpy()
-            labels = labels.cpu().numpy() """
 
             # Replace -100 in the labels as we can't decode them
             labels[labels < 0] = self.tokenizer.pad_token_id
@@ -153,10 +147,6 @@ class Trainer:
 
         # Compute metrics
         result_rouge = self.rouge_score.compute()
-        result_rouge = {
-            key: round(value.mid.fmeasure * 100, 4)
-            for key, value in result_rouge.items()
-        }
         result_bleu = self.bleu_score.compute()
         result_meteor = self.meteor_score.compute()
 
