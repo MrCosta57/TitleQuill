@@ -3,5 +3,9 @@ evaluate
 datasets
 transformers
 accelerate
+nltk
+rouge_score
+python-dotenv
+wandb
 matplotlib==3.8.4
 hydra-core==1.3

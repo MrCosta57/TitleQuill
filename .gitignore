@@ -170,3 +170,5 @@ out/*
 # Ide
 .vscode/
 *ipynb
+
+logs/*.out

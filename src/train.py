@@ -13,13 +13,22 @@ from datamodule.dataset import (
     custom_collate_seq2seq,
     custom_collate_seq2seq_2task,
 )
+from dotenv import load_dotenv
 from model.trainer import Trainer
+
+load_dotenv()
 
 
 def main():
+    """if cfg.use_wandb:
+    wandb.require("core")
+    wandb.login(key=os.getenv("WANDB_API_KEY"))"""
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     num_epochs = 1
     model_type = "google/flan-t5-small"
+    max_length = 512
+    max_new_tokens = 150
     data_dir = "data/OAGKX"
     seed_everything(123)
 
@@ -29,24 +38,23 @@ def main():
         data_dir=data_dir, just_one_file=True, filter_fn=filter_no_keywords
     )
 
-    train_dataloader = DataLoader(
-        dataset_dict["train"],
-        batch_size=2,
-        collate_fn=partial(
-            custom_collate_seq2seq_2task, tokenizer=tokenizer, model=model
-        ),
-        shuffle=False,
-    )
-
     trainer = Trainer(
         model=model,
         tokenizer=tokenizer,
         device=device,
         max_epochs=num_epochs,
-        loss_fn=twotasks_ce_loss_fn,
+        dataset_dict=dataset_dict,
+        train_batch_size=8,
+        train_shuffle=True,
+        val_batch_size=8,
+        max_length=max_length,
+        max_new_tokens=max_new_tokens,
+        collate_fn=custom_collate_seq2seq,
+        loss_fn=hf_loss_fn,
+        log_interval=1,
         lr=1e-5,
     )
-    trainer.train(train_dataloader)
+    trainer.train()
 
 
 if __name__ == "__main__":

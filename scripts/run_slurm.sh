@@ -9,7 +9,9 @@
 #SBATCH --mem-per-cpu=12G
 #SBATCH --output=logs/S-%x.%j.out
 
-module load stack/2024-06 gcc/12.2.0 python_cuda/3.11.6
+module load stack/2024-06 gcc/12.2.0 python_cuda/3.11.6 eth_proxy
 source .venv/bin/activate
 
-python3 src/train.py
+export HF_HOME=".cache/huggingface"
+export HF_DATASETS_DISABLE_PROGRESS_BARS=1
+python3 -u src/train.py

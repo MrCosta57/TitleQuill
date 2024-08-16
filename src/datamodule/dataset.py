@@ -48,6 +48,8 @@ def load_oagkx_dataset(
             "test": train_test_ds["test"],
         }
     )
+    print("Final dataset splits:")
+    print(dataset_dict)
 
     return dataset_dict
 
@@ -56,13 +58,26 @@ def apply_tokenization(
     input_str: str,
     label_str: str,
     tokenizer: PreTrainedTokenizerBase,
+    max_length: int,
     tokenizer_input_args: Dict[str, Any] = {},
     tokenizer_label_args: Dict[str, Any] = {},
 ):
     """Perform tokenization on inputs and labels."""
     # Tokenize inputs and labels
-    model_inputs = tokenizer(input_str, **tokenizer_input_args)
-    label_encodings = tokenizer(label_str, **tokenizer_label_args)
+    model_inputs = tokenizer(
+        input_str,
+        padding="max_length",
+        max_length=max_length,
+        truncation=True,
+        **tokenizer_input_args,
+    )
+    label_encodings = tokenizer(
+        label_str,
+        padding="max_length",
+        max_length=max_length,
+        truncation=True,
+        **tokenizer_label_args,
+    )
 
     # Add labels to model inputs
     model_inputs["labels"] = label_encodings["input_ids"]
@@ -73,8 +88,9 @@ def custom_collate_seq2seq(
     batch,
     tokenizer,
     model,
-    input_format: str = "Abstract: {e}",
-    output_format: str = "Title: {t}\nKeywords: {k}",
+    max_length: int,
+    input_format: str = "Generate title and keywords: {e}",
+    output_format: str = "Title: {t}.\nKeywords: {k}",
 ):
     # batch is a list of dataset items
     new_row = [
@@ -82,11 +98,16 @@ def custom_collate_seq2seq(
             input_format.format(e=item["abstract"]),
             output_format.format(t=item["title"], k=item["keywords"]),
             tokenizer,
+            max_length,
         )
         for item in batch
     ]
     default_collator = DataCollatorForSeq2Seq(
-        tokenizer, model=model, return_tensors="pt"
+        tokenizer,
+        model=model,
+        max_length=max_length,
+        padding="max_length",
+        return_tensors="pt",
     )
     return default_collator(new_row)
 
@@ -95,8 +116,9 @@ def custom_collate_seq2seq_2task(
     batch,
     tokenizer,
     model,
-    input_format1: str = "Title task. Abstract: {e}",
-    input_format2: str = "Keywords task. Abstract: {e}",
+    max_length: int,
+    input_format1: str = "Generate title: {e}",
+    input_format2: str = "Generate keywords: {e}",
     output_format1: str = "Title: {t}",
     output_format2: str = "Keywords: {k}",
 ):
@@ -106,6 +128,7 @@ def custom_collate_seq2seq_2task(
             input_format1.format(e=item["abstract"]),
             output_format1.format(t=item["title"]),
             tokenizer,
+            max_length,
         )
         for item in batch
     ] + [
@@ -113,10 +136,15 @@ def custom_collate_seq2seq_2task(
             input_format2.format(e=item["abstract"]),
             output_format2.format(k=item["keywords"]),
             tokenizer,
+            max_length,
         )
         for item in batch
     ]
     default_collator = DataCollatorForSeq2Seq(
-        tokenizer, model=model, return_tensors="pt"
+        tokenizer,
+        model=model,
+        max_length=max_length,
+        padding="max_length",
+        return_tensors="pt",
     )
     return default_collator(new_row)

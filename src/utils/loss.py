@@ -18,12 +18,7 @@ def twotasks_ce_loss_fn(batch, outputs):
         labels = labels.reshape(-1)
         return F.cross_entropy(logits, labels)
 
-    print("INSIDE LOSS FUNCTION")
-    print("Batch")
-    print({k: v.shape for k, v in batch.items()})
-
     half_batch_len = len(batch["labels"]) // 2
-
     title_logits = outputs["logits"][0:half_batch_len]
     keywords_logits = outputs["logits"][half_batch_len:]
     title_labels = batch["labels"][0:half_batch_len]
