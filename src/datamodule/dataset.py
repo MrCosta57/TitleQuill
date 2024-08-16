@@ -2,7 +2,7 @@ import glob
 from os import path
 import torch
 import re
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Tuple
 from typing import Dict, List
 from datasets import load_dataset, DatasetDict
 from transformers import PreTrainedTokenizerBase, DataCollatorForSeq2Seq
@@ -14,42 +14,64 @@ def filter_no_keywords(batch: Dict[str, List[str]]) -> List[bool]:
 
 def load_oagkx_dataset(
     data_dir: str,
-    val_size: float = 0.1,
-    test_size: float = 0.2,
+    split_size: Tuple[int, int, int] = (0.7, 0.15, 0.15),
     just_one_file: bool = False,
     filter_fn: Callable[[Dict[str, List[str]]], List[bool]] | None = None,
+    verbose: bool = True
 ) -> DatasetDict:
     """Load OAGKX dataset from jsonl files with filtering"""
+    
+    def train_test_split(dataset, test_size: float) -> Tuple[DatasetDict, DatasetDict | None]:
+        """ Split dataset into train and test sets handling the case of no test set """
+        
+        if test_size > 0:
+            dataset_split = dataset.train_test_split(test_size=test_size)
+            return dataset_split["train"], dataset_split["test"]
+        else:
+            return dataset, None
+    
+    train_size, val_size, test_size = split_size
+    
+    assert train_size > 0,                         f"Train size must be greater than 0. Got {train_size}."
+    assert all([0 <= x <= 1 for x in split_size]), f"Split sizes must be in [0, 1]. Got {split_size}."
+    assert sum(split_size) - 1 < 1e-6,             f"Split sizes must sum to 1. Got {split_size}."
+    
+    
+    print_fn = print if verbose else lambda x: None
 
-    print(f"Loading dataset from {data_dir} ...")
+    print_fn(f"Loading dataset from {data_dir} ...")
     # Load dataset
-    data_files = (
-        glob.glob(path.join(data_dir, "part_0.jsonl"))
-        if just_one_file
-        else glob.glob(path.join(data_dir, "*.jsonl"))
-    )
+    files = 'part_0.jsonl' if just_one_file else '*.jsonl'
+    data_files = glob.glob(path.join(data_dir, files))
     dataset = load_dataset(
         "json", data_files=data_files, split="train", streaming=False
     )
-    print(f"Dataset loaded with {len(dataset)} samples.")
+    print_fn(f"Dataset loaded with {len(dataset)} samples.")
 
     # Apply filter function
     if filter_fn:
         dataset = dataset.filter(filter_fn, batched=True)
-
-    train_test_ds = dataset.train_test_split(test_size=test_size)
-    train_val_ds = train_test_ds["train"].train_test_split(test_size=val_size)
+    
+    # Apply split
+    train_val, test = train_test_split(dataset=dataset,   test_size=test_size)
+    train,     val  = train_test_split(dataset=train_val, test_size=val_size / (1 - test_size))
 
     # Wrap the split datasets in a DatasetDict
+    # NOTE: We exclude empty splits
     dataset_dict = DatasetDict(
         {
-            "train": train_val_ds["train"],
-            "validation": train_val_ds["test"],
-            "test": train_test_ds["test"],
+            split_name : ds
+            for split_name, ds in [
+                ("train",      train),
+                ("validation", val),
+                ("test",       test),
+            ]
+            if ds is not None
         }
     )
-    print("Final dataset splits:")
-    print(dataset_dict)
+    
+    print_fn("Final dataset splits:")
+    print_fn({split_name: len(ds) for split_name, ds in dataset_dict.items()})
 
     return dataset_dict
 
