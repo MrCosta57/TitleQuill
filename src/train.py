@@ -18,11 +18,32 @@ from model.trainer import Trainer
 
 load_dotenv()
 
+TRAINING_STRATEGIES = {
+    'combined_tasks': (
+        custom_collate_seq2seq, 
+        hf_loss_fn
+    ),
+    'divided_tasks': (
+        partial(custom_collate_seq2seq_2task, shuffle=False),
+        twotasks_ce_loss_fn
+    ),
+    'divided_tasks_shuffle': (
+        partial(custom_collate_seq2seq_2task, shuffle=True),
+        twotasks_ce_loss_fn
+    )
+}
+
 
 def main():
+    
     """if cfg.use_wandb:
     wandb.require("core")
     wandb.login(key=os.getenv("WANDB_API_KEY"))"""
+    
+    STRATEGY = 'combined_tasks'
+    assert STRATEGY in TRAINING_STRATEGIES, f"Invalid training strategy: {STRATEGY}. Choose one of {list(TRAINING_STRATEGIES.keys())}"
+    
+    collate_fn, loss_fn = TRAINING_STRATEGIES[STRATEGY]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     num_epochs = 1
@@ -49,8 +70,8 @@ def main():
         val_batch_size=2,
         max_length=max_length,
         max_new_tokens=max_new_tokens,
-        collate_fn=custom_collate_seq2seq,
-        loss_fn=hf_loss_fn,
+        collate_fn=collate_fn,
+        loss_fn=loss_fn,
         log_interval=1,
         lr=1e-5,
     )

@@ -1,5 +1,6 @@
 import glob
 from os import path
+import random
 import torch
 import re
 from typing import Any, Callable, List, Tuple
@@ -143,7 +144,20 @@ def custom_collate_seq2seq_2task(
     input_format2: str = "Generate keywords: {e}",
     output_format1: str = "Title: {t}",
     output_format2: str = "Keywords: {k}",
+    shuffle: bool = False
 ):
+    
+    def shuffle_keywords(keywords: str) -> str:
+        
+        SEP = " , "
+        
+        """Shuffle keywords in a string."""
+        keywords = keywords.split(SEP)
+        random.shuffle(keywords)
+        return SEP.join(keywords)
+    
+    shuffle_fn = shuffle_keywords if shuffle else lambda x: x
+    
     # batch is a list of dataset items
     new_row = [
         apply_tokenization(
@@ -156,7 +170,7 @@ def custom_collate_seq2seq_2task(
     ] + [
         apply_tokenization(
             input_format2.format(e=item["abstract"]),
-            output_format2.format(k=item["keywords"]),
+            output_format2.format(k=shuffle_fn(item["keywords"])),
             tokenizer,
             max_length,
         )
@@ -170,3 +184,4 @@ def custom_collate_seq2seq_2task(
         return_tensors="pt",
     )
     return default_collator(new_row)
+
