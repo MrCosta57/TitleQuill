@@ -70,9 +70,9 @@ def line_plot(
     fig.savefig(save_path, bbox_inches="tight")
 
 
-def plot_stats(stats: Dict[str, Dict[int, str]], out_dir: str):
+def plot_stats(stats: Dict[str, Dict[int, int]], out_dir: str):
 
-    def dict_to_cumulative(dict_: Dict[str, int]) -> Dict[str, int]:
+    def dict_to_cumulative(dict_: Dict[int, int]) -> Dict[int, int]:
         """Transpose a count dictionary into a cumulative-count dictionary"""
 
         sorted_keys = sorted(dict_.keys())
