@@ -172,3 +172,6 @@ out/*
 *ipynb
 
 logs/*.out
+*.png
+*.pkl
+

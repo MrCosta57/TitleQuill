@@ -1,100 +1,233 @@
+from dataclasses import dataclass
 import glob
 from os import path
 import random
-import torch
 import re
-from typing import Any, Callable, List, Tuple
+from nltk.corpus import stopwords
+from typing import Any, Callable, Counter, List, Set, Tuple
 from typing import Dict, List
 from datasets import load_dataset, DatasetDict
-from transformers import PreTrainedTokenizerBase, DataCollatorForSeq2Seq
+from transformers import (
+    PreTrainedTokenizerBase,
+    DataCollatorForSeq2Seq,
+    PreTrainedTokenizer,
+)
 
-from src.datamodule.stats import OAGKXItemStats
+
+@dataclass
+class OAGKXItemStats:
+    """Dataclass to represent an item in the OAGKX dataset - i.e. a line in the dataset file"""
+
+    title: str
+    """ Title of the paper """
+
+    abstract: str
+    """ Abstract of the paper """
+
+    keywords: Set[str]
+    """ Keywords associated with the paper """
+
+    _KEYWORDS_DELIMITER = " , "
+    _SENTENCE_DELIMITERS = r"[.!?]"
+    _STOPWORDS = set(stopwords.words("english"))
+
+    def __str__(self) -> str:
+        return f"Title: {self.title}\n\nAbstract: {self.abstract}\n\nKeywords: {self.keywords}"
+
+    def __repr__(self) -> str:
+        return str(self)
+
+    @classmethod
+    def from_data(
+        cls, title: str, abstract: str, keywords_str: str
+    ) -> "OAGKXItemStats":
+        """Parses a line from the dataset file and returns an OAGKXItem object"""
+
+        # Extract keywords
+        keywords = set(
+            [
+                keyword.strip()
+                for keyword in keywords_str.split(OAGKXItemStats._KEYWORDS_DELIMITER)
+            ]
+        )
+
+        return OAGKXItemStats(
+            title=title,
+            abstract=abstract,
+            keywords=keywords,
+        )
+
+    @classmethod
+    def from_json(cls, json_item: Dict[str, str]) -> "OAGKXItemStats":
+        """Parses a line from the dataset file and returns an OAGKXItem object"""
+
+        # Extract title and abstract
+        title = json_item["title"]
+        abstract = json_item["abstract"]
+        keywords_str = json_item["keywords"]
+
+        # Extract keywords
+        keywords = set(
+            [
+                keyword.strip()
+                for keyword in keywords_str.split(OAGKXItemStats._KEYWORDS_DELIMITER)
+            ]
+        )
+
+        return OAGKXItemStats(
+            title=title,
+            abstract=abstract,
+            keywords=keywords,
+        )
+
+    @property
+    def keywords_in_abstract(self) -> Set[str]:
+        """Returns the set of keywords that appear in the abstract"""
+        return set([kw for kw in self.keywords if kw in self.abstract])
+
+    @property
+    def keywords_in_abstract_prc(self) -> float:
+        """Returns the percentage of keywords that appear in the abstract"""
+        return len(self.keywords_in_abstract) / len(self.keywords)
+
+    @property
+    def abstract_first_sentence(self) -> str:
+        """Returns the first sentence of the abstract"""
+        return re.split(OAGKXItemStats._SENTENCE_DELIMITERS, self.abstract)[0]
+
+    @property
+    def sentence_with_more_keywords(self) -> Tuple[str, int]:
+        # Find the sentence with the most keywords
+        sentence = max(
+            re.split(OAGKXItemStats._SENTENCE_DELIMITERS, self.abstract),
+            key=lambda sentence: len([kw for kw in self.keywords if kw in sentence]),
+        )
+        return sentence, len([kw for kw in self.keywords if kw in sentence])
+
+    @property
+    def title_word_count(self) -> int:
+        """Returns the number of words in the title"""
+        return len(re.findall(r"\w+", self.title))
+
+    @property
+    def abstract_word_count(self) -> int:
+        """Returns the number of words in the title"""
+        return len(re.findall(r"\w+", self.abstract))
+
+    def get_most_frequent_words(self, min_freq: int = 3) -> Dict[str, int]:
+        """Returns the k most frequent words in the abstract"""
+
+        # Extract words from the abstract
+        words = re.findall(r"\w+", self.abstract)
+
+        filtered_words = [word for word in words if word.lower() not in self._STOPWORDS]
+
+        # Count the frequency of each word
+        word_freq = Counter(filtered_words)
+        filtered_word_freq = {
+            word: freq for word, freq in word_freq.items() if freq >= min_freq
+        }
+
+        # Return the k most frequent words
+        return filtered_word_freq
+
+    def get_abstract_tokens(self, tokenizer: PreTrainedTokenizer):
+        return len(tokenizer(self.abstract)["input_ids"])  # type: ignore
 
 
 def filter_no_keywords(batch: Dict[str, List[str]]) -> List[bool]:
     return [bool(re.match(r"\w+", elem)) for elem in batch["keywords"]]
 
+
 def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
-    
+
     def filter_fn_aux(sample_triple):
-        
+
         title, abstract, keywords = sample_triple
-        
-        item = OAGKXItemStats.from_json({'title': title, 'abstract': abstract, 'keywords': keywords})
-        
+
+        item = OAGKXItemStats.from_data(title, abstract, keywords)
+
         abstract_tokens = item.abstract_word_count
-        title_length    = item.title_word_count
-        keywords_count  = len(item.keywords)
-        
+        title_length = item.title_word_count
+        keywords_count = len(item.keywords)
+
         print(abstract_tokens)
-        
+
         return (
-            250 <= abstract_tokens <= 540 and
-            10 <= title_length    <=  20 and
-            4  <= keywords_count  <=   5
+            250 <= abstract_tokens <= 540
+            and 10 <= title_length <= 20
+            and 4 <= keywords_count <= 5
         )
-    
-    return [filter_fn_aux(sample_triple) for sample_triple in zip(batch['title'], batch['abstract'], batch['keywords'])]
+
+    return [
+        filter_fn_aux(sample_triple)
+        for sample_triple in zip(batch["title"], batch["abstract"], batch["keywords"])
+    ]
 
 
 def load_oagkx_dataset(
     data_dir: str,
-    split_size: Tuple[int, int, int] = (0.7, 0.15, 0.15),
+    split_size: Tuple[float, float, float] = (0.7, 0.15, 0.15),
     just_one_file: bool = False,
     filter_fn: Callable[[Dict[str, List[str]]], List[bool]] | None = None,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> DatasetDict:
     """Load OAGKX dataset from jsonl files with filtering"""
-    
-    def train_test_split(dataset, test_size: float) -> Tuple[DatasetDict, DatasetDict | None]:
-        """ Split dataset into train and test sets handling the case of no test set """
-        
+
+    def train_test_split(
+        dataset, test_size: float
+    ) -> Tuple[DatasetDict, DatasetDict | None]:
+        """Split dataset into train and test sets handling the case of no test set"""
+
         if test_size > 0:
             dataset_split = dataset.train_test_split(test_size=test_size)
             return dataset_split["train"], dataset_split["test"]
         else:
             return dataset, None
-    
+
     train_size, val_size, test_size = split_size
-    
-    assert train_size > 0,                         f"Train size must be greater than 0. Got {train_size}."
-    assert all([0 <= x <= 1 for x in split_size]), f"Split sizes must be in [0, 1]. Got {split_size}."
-    assert sum(split_size) - 1 < 1e-6,             f"Split sizes must sum to 1. Got {split_size}."
-    
-    
+
+    assert train_size > 0, f"Train size must be greater than 0. Got {train_size}."
+    assert all(
+        [0 <= x <= 1 for x in split_size]
+    ), f"Split sizes must be in [0, 1]. Got {split_size}."
+    assert sum(split_size) - 1 < 1e-6, f"Split sizes must sum to 1. Got {split_size}."
+
     print_fn = print if verbose else lambda x: None
 
     print_fn(f"Loading dataset from {data_dir} ...")
     # Load dataset
-    files = 'part_0.jsonl' if just_one_file else '*.jsonl'
+    files = "part_0.jsonl" if just_one_file else "*.jsonl"
     data_files = glob.glob(path.join(data_dir, files))
     dataset = load_dataset(
         "json", data_files=data_files, split="train", streaming=False
     )
-    print_fn(f"Dataset loaded with {len(dataset)} samples.")
+    print_fn(f"Dataset loaded with {len(dataset)} samples.")  # type: ignore
 
     # Apply filter function
     if filter_fn:
         dataset = dataset.filter(filter_fn, batched=True)
-    
+
     # Apply split
-    train_val, test = train_test_split(dataset=dataset,   test_size=test_size)
-    train,     val  = train_test_split(dataset=train_val, test_size=val_size / (1 - test_size))
+    train_val, test = train_test_split(dataset=dataset, test_size=test_size)
+    train, val = train_test_split(
+        dataset=train_val, test_size=val_size / (1 - test_size)
+    )
 
     # Wrap the split datasets in a DatasetDict
-    # NOTE: We exclude empty splits
+    # NOTE: Empty splits are excluded
     dataset_dict = DatasetDict(
         {
-            split_name : ds
+            split_name: ds
             for split_name, ds in [
-                ("train",      train),
+                ("train", train),
                 ("validation", val),
-                ("test",       test),
+                ("test", test),
             ]
             if ds is not None
         }
     )
-    
+
     print_fn("Final dataset splits:")
     print_fn({split_name: len(ds) for split_name, ds in dataset_dict.items()})
 
@@ -168,20 +301,20 @@ def custom_collate_seq2seq_2task(
     input_format2: str = "Generate keywords: {e}",
     output_format1: str = "Title: {t}",
     output_format2: str = "Keywords: {k}",
-    shuffle: bool = False
+    shuffle: bool = False,
 ):
-    
+
     def shuffle_keywords(keywords: str) -> str:
-        
+
         SEP = " , "
-        
+
         """Shuffle keywords in a string."""
-        keywords = keywords.split(SEP)
-        random.shuffle(keywords)
-        return SEP.join(keywords)
-    
+        keywords_list = keywords.split(SEP)
+        random.shuffle(keywords_list)
+        return SEP.join(keywords_list)
+
     shuffle_fn = shuffle_keywords if shuffle else lambda x: x
-    
+
     # batch is a list of dataset items
     new_row = [
         apply_tokenization(
@@ -208,4 +341,3 @@ def custom_collate_seq2seq_2task(
         return_tensors="pt",
     )
     return default_collator(new_row)
-
