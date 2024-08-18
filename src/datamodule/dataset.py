@@ -8,9 +8,33 @@ from typing import Dict, List
 from datasets import load_dataset, DatasetDict
 from transformers import PreTrainedTokenizerBase, DataCollatorForSeq2Seq
 
+from src.datamodule.stats import OAGKXItemStats
+
 
 def filter_no_keywords(batch: Dict[str, List[str]]) -> List[bool]:
     return [bool(re.match(r"\w+", elem)) for elem in batch["keywords"]]
+
+def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
+    
+    def filter_fn_aux(sample_triple):
+        
+        title, abstract, keywords = sample_triple
+        
+        item = OAGKXItemStats.from_json({'title': title, 'abstract': abstract, 'keywords': keywords})
+        
+        abstract_tokens = item.abstract_word_count
+        title_length    = item.title_word_count
+        keywords_count  = len(item.keywords)
+        
+        print(abstract_tokens)
+        
+        return (
+            250 <= abstract_tokens <= 540 and
+            10 <= title_length    <=  20 and
+            4  <= keywords_count  <=   5
+        )
+    
+    return [filter_fn_aux(sample_triple) for sample_triple in zip(batch['title'], batch['abstract'], batch['keywords'])]
 
 
 def load_oagkx_dataset(

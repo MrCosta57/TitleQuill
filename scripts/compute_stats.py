@@ -5,9 +5,6 @@ sys.path.append(os.path.join(__file__, '..', '..'))
 import pickle
 from os import path
 from typing import Counter, Dict, Any
-from functools import partial
-
-from transformers import AutoTokenizer, PreTrainedTokenizer
 
 from src.datamodule.stats import OAGKXItemStats, plot_stats
 from src.datamodule.dataset import load_oagkx_dataset
@@ -16,12 +13,12 @@ MODEL_NAME = 'google/flan-t5-small'
 OUT_DIR    = r'figures'
 DATA_DIR   = r'data\OAGKX'
 
-def mapping_function(el: Dict[str, str], tokenizer: PreTrainedTokenizer) -> Dict[str, Any]:
+def mapping_function(el: Dict[str, str]) -> Dict[str, Any]:
     
     item = OAGKXItemStats.from_json(el)
     
     stats = {
-        'abstract_tokens'     : item.get_abstract_tokens(tokenizer),
+        'abstract_length'     : item.abstract_word_count,
         'title_length'        : item.title_word_count,
         'keywords_count'      : len(item.keywords),
         # 'keywords_in_abstract': len(item.keywords_in_abstract),
@@ -42,12 +39,10 @@ if __name__ == "__main__":
     )['train']
     
     #dataset = dataset.select(range(100))
-
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     
     # Compute stats
     stats_dataset = dataset.map(
-        partial(mapping_function, tokenizer=tokenizer), 
+        mapping_function, 
         remove_columns=dataset.column_names
     )
     

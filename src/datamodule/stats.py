@@ -87,6 +87,11 @@ class OAGKXItemStats:
         ''' Returns the number of words in the title '''
         return len(re.findall(r'\w+', self.title))
     
+    @property
+    def abstract_word_count(self) -> int:
+        ''' Returns the number of words in the title '''
+        return len(re.findall(r'\w+', self.abstract))
+    
     def get_most_frequent_words(self, min_freq : int = 3)-> Dict[str, int]:
         ''' Returns the k most frequent words in the abstract '''
         
