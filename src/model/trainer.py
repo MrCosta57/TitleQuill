@@ -1,9 +1,10 @@
-from typing import Callable
+from typing import Callable, Dict, List, Tuple
 import torch
 import evaluate
 from functools import partial
 from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from datasets import DatasetDict
 from utils.general_utils import postprocess_validation_text
@@ -26,6 +27,7 @@ class Trainer:
         loss_fn: Callable,
         lr: float = 1e-5,
         log_interval: int = 100,
+        early_stopping_epochs: int = 5
     ):
         assert "train" in dataset_dict.keys()
         assert "validation" in dataset_dict.keys()
@@ -48,8 +50,12 @@ class Trainer:
         self.rouge_score = evaluate.load("rouge")
         self.bleu_score = evaluate.load("bleu")
         self.meteor_score = evaluate.load("meteor")
+        self.early_stopping_epochs = early_stopping_epochs
 
-    def train(self):
+    def train(self) -> Tuple[PreTrainedModel, Dict[str, List[float]]]:
+
+        self._loss_history = {'train': [], 'val': []}
+
         self.model.train()
         train_dataloader = DataLoader(
             self.dataset_dict["train"],
@@ -64,10 +70,14 @@ class Trainer:
         )
 
         print("Starting training...")
+
         for epoch in range(self.max_epochs):
+
             print(f"Epoch {epoch + 1}/{self.max_epochs}")
 
-            for i, batch in enumerate(train_dataloader):
+            loss_batches = []
+
+            for i, batch in enumerate(tqdm(train_dataloader)):
                 # print([f"{k}: {v.shape}" for k, v in batch.items()])
                 batch = {k: v.to(self.device) for k, v in batch.items()}
                 # Forward pass
@@ -81,18 +91,26 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
 
-                # if i % self.log_interval == 0:
-                #    self.print_eval(batch, outputs)
-                if i == 100:
-                    break
+                if i % self.log_interval == 100:
+                    self.print_eval(batch, outputs)
+
+                loss_batches.append(loss.item())
+            
+            self._loss_history['train'].append(sum(loss_batches) / len(loss_batches))
 
             self.validation()
 
         print("Training completed")
 
+        self.model.eval()
+
+        return self.model, self._loss_history
+
     @torch.no_grad()
     def validation(self):
+
         self.model.eval()
+
         val_dataloader = DataLoader(
             self.dataset_dict["validation"],
             batch_size=self.val_batch_size,

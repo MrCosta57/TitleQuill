@@ -151,7 +151,7 @@ def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
         title_length = item.title_word_count
         keywords_count = len(item.keywords)
 
-        print(abstract_tokens)
+        # print(abstract_tokens)
 
         return (
             250 <= abstract_tokens <= 540
