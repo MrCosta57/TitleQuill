@@ -107,9 +107,9 @@ class OAGKXItemStats:
         # Return the k most frequent words
         return filtered_word_freq
     
-    def get_abstract_tokens(self, tokenizer: PreTrainedTokenizer):
+    def get_abstract_tokens(self, tokenizer: PreTrainedTokenizer) -> int:
         
-        return len(tokenizer(self.abstract)['input_ids'])
+        return len(tokenizer(self.abstract)['input_ids']) # type: ignore - we deal with 1 dimensional input
 
 def line_plot(
     data      : Dict, 
@@ -179,11 +179,11 @@ def line_plot(
 
 
 def plot_stats(
-    stats: Dict[str, Dict[int, str]],
+    stats: Dict[str, Dict[int, int]],
     out_dir: str
 ):
     
-    def dict_to_cumulative(dict_: Dict[str, int]) -> Dict[str, int]:
+    def dict_to_cumulative(dict_: Dict[int, int]) -> Dict[int, int]:
         ''' Transpose a count dictionary into a cumulative-count dictionary '''
         
         sorted_keys     = sorted(dict_.keys())
