@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 import glob
-from os import path
+import os
 import random
 import re
 from nltk.corpus import stopwords
 from typing import Any, Callable, Counter, List, Set, Tuple
 from typing import Dict, List
-from datasets import load_dataset, DatasetDict
+from datasets import load_dataset, DatasetDict, load_from_disk
 from transformers import (
     PreTrainedTokenizerBase,
     DataCollatorForSeq2Seq,
@@ -142,19 +142,14 @@ def filter_no_keywords(batch: Dict[str, List[str]]) -> List[bool]:
 def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
 
     def filter_fn_aux(sample_triple):
-
         title, abstract, keywords = sample_triple
-
         item = OAGKXItemStats.from_data(title, abstract, keywords)
-
-        abstract_tokens = item.abstract_word_count
+        abstract_words = item.abstract_word_count
         title_length = item.title_word_count
         keywords_count = len(item.keywords)
-
         # print(abstract_tokens)
-
         return (
-            250 <= abstract_tokens <= 540
+            250 <= abstract_words <= 540
             and 10 <= title_length <= 20
             and 4 <= keywords_count <= 5
         )
@@ -195,18 +190,22 @@ def load_oagkx_dataset(
 
     print_fn = print if verbose else lambda x: None
 
-    print_fn(f"Loading dataset from {data_dir} ...")
-    # Load dataset
-    files = "part_0.jsonl" if just_one_file else "*.jsonl"
-    data_files = glob.glob(path.join(data_dir, files))
-    dataset = load_dataset(
-        "json", data_files=data_files, split="train", streaming=False
-    )
-    print_fn(f"Dataset loaded with {len(dataset)} samples.")  # type: ignore
-
-    # Apply filter function
-    if filter_fn:
-        dataset = dataset.filter(filter_fn, batched=True)
+    if os.path.exists(os.path.join(data_dir, "filtered")):
+        print_fn("Loading filtered dataset ...")
+        dataset = load_from_disk(os.path.join(data_dir, "filtered"))
+        print_fn(f"Dataset loaded with {len(dataset)} samples.")
+    else:
+        print_fn(f"Loading dataset from {data_dir} ...")
+        files = "part_0.jsonl" if just_one_file else "*.jsonl"
+        data_files = glob.glob(os.path.join(data_dir, files))
+        dataset = load_dataset(
+            "json", data_files=data_files, split="train", streaming=False
+        )
+        print_fn(f"Dataset loaded with {len(dataset)} samples.")  # type: ignore
+        # Apply filter function
+        if filter_fn:
+            dataset = dataset.filter(filter_fn, batched=True)
+            dataset.save_to_disk(os.path.join(data_dir, "filtered"))
 
     # Apply split
     train_val, test = train_test_split(dataset=dataset, test_size=test_size)
@@ -270,7 +269,7 @@ def custom_collate_seq2seq(
     model,
     max_length: int,
     input_format: str = "Generate title and keywords: {e}",
-    output_format: str = "Title: {t}.\nKeywords: {k}",
+    output_format: str = "Title: {t}<sep>Keywords: {k}",
 ):
     # batch is a list of dataset items
     new_row = [
@@ -305,9 +304,7 @@ def custom_collate_seq2seq_2task(
 ):
 
     def shuffle_keywords(keywords: str) -> str:
-
         SEP = " , "
-
         """Shuffle keywords in a string."""
         keywords_list = keywords.split(SEP)
         random.shuffle(keywords_list)
