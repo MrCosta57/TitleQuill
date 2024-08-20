@@ -9,7 +9,7 @@ from transformers import (
     PreTrainedModel,
 )
 from utils.general_utils import seed_everything
-from utils.loss import twotasks_ce_loss_fn, hf_loss_fn
+from utils.loss import twotasks_ce_loss_fn, hf_loss_fn, twotasks_ce_eisl_loss_fn
 from datamodule.dataset import (
     load_oagkx_dataset,
     filter_no_keywords,
@@ -26,7 +26,7 @@ TRAINING_STRATEGIES = {
     "combined_tasks": (custom_collate_seq2seq, hf_loss_fn),
     "divided_tasks": (
         partial(custom_collate_seq2seq_2task, shuffle=False),
-        hf_loss_fn,  # twotasks_ce_loss_fn
+        twotasks_ce_eisl_loss_fn, 
     ),
     "divided_tasks_shuffle": (
         partial(custom_collate_seq2seq_2task, shuffle=True),
