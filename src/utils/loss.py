@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 
-def hf_loss_fn(batch, outputs):
+def hf_loss_fn(batch, outputs, lambda_=1.0):
     loss = outputs.loss
     return loss
 
@@ -19,7 +19,7 @@ def apply_ce(logits, labels):
     return F.cross_entropy(logits, labels, ignore_index=-100)
 
 
-def twotasks_ce_loss_fn(batch, outputs):
+def twotasks_ce_loss_fn(batch, outputs, lambda_=1.0):
     half_batch_len = len(batch["labels"]) // 2
     title_logits = outputs["logits"][0:half_batch_len]
     keywords_logits = outputs["logits"][half_batch_len:]
@@ -33,7 +33,7 @@ def twotasks_ce_loss_fn(batch, outputs):
     return combined_loss
 
 
-def twotasks_ce_eisl_loss_fn(batch, outputs):
+def twotasks_ce_eisl_loss_fn(batch, outputs, lambda_=1.0):
 
     # Generates a list of n-gram lengths based on the provided ngram configuration and the output length of the model.
     # Returns a sorted list of valid n-gram values, or just the output_length if none are valid.
@@ -54,9 +54,11 @@ def twotasks_ce_eisl_loss_fn(batch, outputs):
             ngram_list = [output_length]
 
         return ngram_list
-    
+
     # Computes the Expected Inverse Sequence Likelihood (EISL) loss with convolution for the n-grams.
-    def batch_log_EISL_cnn(decoder_outputs, target_idx, ngram_list, pad=1, weight_list=None):
+    def batch_log_EISL_cnn(
+        decoder_outputs, target_idx, ngram_list, pad=1, weight_list=None
+    ):
         """
         decoder_outputs: [batch_size, output_len, vocab_size]
             - matrix with probabilityes  -- log probs
@@ -81,7 +83,9 @@ def twotasks_ce_eisl_loss_fn(batch, outputs):
         if weight_list is None:
             weight_list = [1.0 / len(ngram_list)] * len(ngram_list)
 
-        decoder_outputs = torch.relu(decoder_outputs + 20) - 20  # "+20 -20" to filter out very low probabilities, maintaining numerical stability during subsequent calculations
+        decoder_outputs = (
+            torch.relu(decoder_outputs + 20) - 20
+        )  # "+20 -20" to filter out very low probabilities, maintaining numerical stability during subsequent calculations
 
         # [batch_size, output_len, target_len]
         index = target_idx.unsqueeze(1).expand(-1, output_len, tgt_len)
@@ -128,9 +132,11 @@ def twotasks_ce_eisl_loss_fn(batch, outputs):
 
     log_probs = F.log_softmax(keywords_logits, dim=-1)
 
-    ngrams = [10] # TODO: decide the ngrams
+    ngrams = [10]  # TODO: decide the ngrams
     ngram_list = config_ngram_list(ngrams, output_length=outputs["logits"].size(1))
-    keywords_loss = batch_log_EISL_cnn(log_probs, keywords_labels, ngram_list=ngram_list)
+    keywords_loss = batch_log_EISL_cnn(
+        log_probs, keywords_labels, ngram_list=ngram_list
+    )
 
     combined_loss = title_loss + keywords_loss
     return combined_loss

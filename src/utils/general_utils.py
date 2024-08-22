@@ -4,24 +4,18 @@ import random
 import torch.nn.functional as F
 import nltk
 
+nltk.download("punkt", quiet=True)
+nltk.download("omw-1.4", quiet=True)
+nltk.download("wordnet", quiet=True)
 
-def seed_everything(seed: int):
+
+def seed_everything(seed: int = 123):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
     random.seed(seed)
     # torch.backends.cudnn.deterministic = True
     # torch.backends.cudnn.benchmark = False
-
-
-def pad_tensor(tensor, pad_token_id):
-    # Find the max length in the batch
-    max_len = max(t.size(-1) for t in tensor)
-    # Pad all tensors to the max length
-    padded_tensors = [
-        F.pad(t, (0, max_len - t.size(-1)), value=pad_token_id) for t in tensor
-    ]
-    return torch.stack(padded_tensors, dim=0)
 
 
 def postprocess_validation_text(preds, labels):

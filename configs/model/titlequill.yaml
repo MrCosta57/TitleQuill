@@ -1,0 +1,12 @@
+model_name: "TitleQuill"
+model_type: "google/flan-t5-small"
+
+
+strategy: "combined_tasks" # One of "combined_tasks", "divided_tasks_shuffle", "divided_tasks_ce_eisl"
+lambda_: 1.0 # Used only in "divided_tasks_ce_eisl" strategy
+train_batch_size: 2 #64
+val_batch_size: 2 #128
+max_epochs: 1
+max_length: 512
+max_new_tokens: 150
+lr: 5e-4

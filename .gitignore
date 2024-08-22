@@ -172,6 +172,8 @@ out/*
 *ipynb
 
 logs/*.out
+output/*
+!output/.gitkeep
 *.png
 *.pkl
 *.pt
