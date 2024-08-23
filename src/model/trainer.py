@@ -185,7 +185,9 @@ class Trainer:
             self.print_fn("Starting Validation")
         else:
             self.print_fn("Starting Testing")
+        self.print_fn(f" - Batch Size:  {self.val_batch_size}")
         self.print_fn(f" - Num Batches: {len(dataloader)}")
+        self.print_fn(f" - Device:      {self.device}")
 
         for i, batch in enumerate(dataloader):
             # Put batch on device

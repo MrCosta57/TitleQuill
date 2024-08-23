@@ -157,29 +157,7 @@ def extract_sentences(
     return summary
 
 
-def write_files(summary, key_phrases, filename):
-    """Write key phrases and summaries to a file."""
-    print("Generating output to " + "keywords/" + filename)
-    key_phrase_file = io.open("keywords/" + filename, "w")
-    for key_phrase in key_phrases:
-        key_phrase_file.write(key_phrase + "\n")
-    key_phrase_file.close()
-
-    print("Generating output to " + "summaries/" + filename)
-    summary_file = io.open("summaries/" + filename, "w")
-    summary_file.write(summary)
-    summary_file.close()
-
-    print("-")
-
-
-def summarize_all():
-    # retrieve each of the articles
-    articles = os.listdir("articles")
-    for article in articles:
-        print("Reading articles/" + article)
-        article_file = io.open("articles/" + article, "r")
-        text = article_file.read()
-        keyphrases = extract_key_phrases(text)
-        summary = extract_sentences(text)
-        write_files(summary, keyphrases, article)
+def get_title_and_keywords(text: str):
+    title = extract_sentences(text)
+    keywords = extract_key_phrases(text)
+    return title, keywords

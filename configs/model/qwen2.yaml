@@ -1,2 +1,4 @@
 model_name: "Qwen2"
 model_type: "Qwen/Qwen2-0.5B-Instruct"
+
+max_new_tokens: 256
