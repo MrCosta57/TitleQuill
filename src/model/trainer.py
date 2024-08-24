@@ -12,9 +12,6 @@ from datasets import DatasetDict
 from utils.general_utils import postprocess_validation_text
 from utils.evaluator import Evaluator
 
-
-
-
 class Trainer:
 
     def __init__(
@@ -152,7 +149,7 @@ class Trainer:
                     )
                     self._print_eval(batch, outputs, epoch, batch_id)
 
-                if batch_id == 100: break
+                # if batch_id == 100: break
 
             # Add epoch loss as average of batch losses
             self._history["train"]["loss"].append(sum(loss_batches) / len(loss_batches))
