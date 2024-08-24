@@ -3,7 +3,7 @@ defaults:
   - data: oagkx
   - hydra: default
   # For disable logging, set to null
-  - logger: null #wandb
+  - logger: wandb
   - model: null
 
 device: "cpu" #"cuda:0"

@@ -1,2 +1,3 @@
-project_name: "NLP-course"
+# project_name: "NLP-course"
+project: "NLP-course"
 log_dir: "logs"

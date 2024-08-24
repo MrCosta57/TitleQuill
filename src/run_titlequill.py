@@ -45,11 +45,11 @@ def main(cfg):
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
     assert cfg is not None
-    if cfg.get("model") == None:
+    if cfg.get("model") is None:
         conf = OmegaConf.load("configs/model/titlequill.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
-    if cfg.get("logger") != None:
+    if cfg.get("logger") is not None:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
         wandb.init(

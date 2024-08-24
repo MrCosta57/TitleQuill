@@ -1,8 +1,9 @@
 from datetime import datetime
 import os
-from typing import Callable, Dict, List, Literal, Tuple
+from typing import Callable, Dict, List, Literal, Optional, Tuple
 import loguru
 import torch
+import wandb
 from functools import partial
 from transformers.optimization import Adafactor
 from torch.utils.data import DataLoader
@@ -10,6 +11,8 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from datasets import DatasetDict
 from utils.general_utils import postprocess_validation_text
 from utils.evaluator import Evaluator
+
+
 
 
 class Trainer:
@@ -76,13 +79,15 @@ class Trainer:
         self.evaluator = evaluator
 
     def train(self) -> Dict[str, Dict[str, List[float]]]:
+
         # Logging function
-        self.print_fn = print
-        """ loguru.logger.add(
+        # self.log_fn = lambda x: None
+        # self.log_fn = print
+        loguru.logger.add(
             f"logs/training-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log",
             level="INFO",
         )
-        self.print_fn = loguru.logger.info """
+        self.log_fn = loguru.logger.info
 
         # Initialize history of losses and metrics
         self._history = {
@@ -108,21 +113,18 @@ class Trainer:
             shuffle=self.shuffle,
         )
 
-        self.print_fn(f"Starting Training")
-        self.print_fn(f" - Epochs:            {self.max_epochs}")
-        self.print_fn(f" - Train Batch Size:  {self.train_batch_size}")
-        self.print_fn(f" - Num Train Batches: {len(train_dataloader)}")
-        self.print_fn(f" - Device:            {self.device}")
-        self.print_fn(f"")
-
         # Set model to training mode
         self.model.train()
         for epoch in range(self.max_epochs):
-            self.print_fn(
+
+            wandb.log({"epoch": epoch + 1})
+
+            self.log_fn(
                 f"Epoch {epoch + 1}/{self.max_epochs} ({round((epoch + 1) / self.max_epochs * 100, 2)}%)"
             )
             loss_batches = []
-            for i, batch in enumerate(train_dataloader):
+            for batch_id, batch in enumerate(train_dataloader):
+
                 # Move batch to device
                 batch = {k: v.to(self.device) for k, v in batch.items()}
                 # Forward pass
@@ -136,21 +138,30 @@ class Trainer:
                 # Add batch loss
                 loss_batches.append(loss.item())
                 # Log
-                if i % self.log_interval == 0:
-                    self.print_fn(
-                        f" > Training batch {i+1}/{len(train_dataloader)} ({round(i+1 / len(train_dataloader) * 100, 2)}%) - Loss: {loss.item()}"
+                if batch_id % self.log_interval == 0:
+                    
+                    wandb.log({
+                        #"batch": batch_id + 1, 
+                        "batch_loss": loss.item()
+                    })
+
+                    self.log_fn(
+                        f" > Training batch {batch_id+1}/{len(train_dataloader)} ({round(batch_id+1 / len(train_dataloader) * 100, 2)}%) - Loss: {loss.item()}"
                     )
-                    self._print_eval(batch, outputs)
+                    self._print_eval(batch, outputs, epoch, batch_id)
 
             # Add epoch loss as average of batch losses
             self._history["train"]["loss"].append(sum(loss_batches) / len(loss_batches))
-            # Perform validation
-            self.validation()
 
-        self.print_fn("Training completed")
+            wandb.log({"epoch_loss": self._history["train"]["loss"][-1]})
+
+            # Perform validation
+            self.validation(epoch=epoch)
+
+        self.log_fn("Training completed")
         return self._history
 
-    def validation(self):
+    def validation(self, epoch: int):
         val_dataloader = DataLoader(
             self.dataset_dict["validation"],  # type: ignore - interface compatibility
             batch_size=self.val_batch_size,
@@ -162,7 +173,7 @@ class Trainer:
             ),
             shuffle=False,
         )
-        self._common_eval(val_dataloader, "val")
+        self._common_eval(val_dataloader, "val", epoch=epoch)
 
     def test(self):
         test_dataloader = DataLoader(
@@ -179,15 +190,20 @@ class Trainer:
         self._common_eval(test_dataloader, "test")
 
     @torch.no_grad()
-    def _common_eval(self, dataloader: DataLoader, eval_type: Literal["val", "test"]):
+    def _common_eval(self, dataloader: DataLoader, eval_type: Literal["val", "test"], epoch: Optional[int] = None):
+
+        assert eval_type in ["val", "test"]
+        assert  epoch is not None and eval_type == "val" or\
+                epoch is     None and eval_type == "test"
+
         self.model.eval()
         if eval_type == "val":
-            self.print_fn("Starting Validation")
+            self.log_fn("Starting Validation")
         else:
-            self.print_fn("Starting Testing")
-        self.print_fn(f" - Batch Size:  {self.val_batch_size}")
-        self.print_fn(f" - Num Batches: {len(dataloader)}")
-        self.print_fn(f" - Device:      {self.device}")
+            self.log_fn("Starting Testing")
+        self.log_fn(f" - Batch Size:  {self.val_batch_size}")
+        self.log_fn(f" - Num Batches: {len(dataloader)}")
+        self.log_fn(f" - Device:      {self.device}")
 
         for i, batch in enumerate(dataloader):
             # Put batch on device
@@ -222,20 +238,32 @@ class Trainer:
 
         # Compute metrics
         if eval_type == "val":
-            self.print_fn(" > Validation Scores: ")
+            self.log_fn(" > Validation Scores: ")
         else:
-            self.print_fn(" > Test Scores: ")
+            self.log_fn(" > Test Scores: ")
 
         result_log = self.evaluator.compute()
-        for metric_name, result in result_log.items():
-            self.print_fn(f"   > {metric_name.upper()}: {result}")
-            self._history[eval_type][metric_name].append(result)
 
-        self.print_fn("")
+        # metric_log = {'eval_type': eval_type}
+ 
+        # if eval_type == "val":
+        #     metric_log['epoch'] = epoch  # type: ignore - checked by assert
+
+        metric_log = {}
+ 
+        for metric_name, result in result_log.items():
+            self.log_fn(f"   > {metric_name.upper()}: {result}")
+            self._history[eval_type][metric_name].append(result)
+            for value_name, value in result.items():
+                metric_log[f"{metric_name}_{value_name}"] = value
+        
+        wandb.log(metric_log)
+
+        self.log_fn("")
         self.model.train()
 
     @torch.no_grad()
-    def _print_eval(self, batch, outputs):
+    def _print_eval(self, batch, outputs, epoch, batch_id):
         self.model.eval()
         if "logits" in outputs:
             # For seq2seq models like T5, the logits usually correspond to decoder outputs
@@ -263,14 +291,22 @@ class Trainer:
                 log_idx = [0, (len(predicted_text) + 1) // 2]
 
                 for idx in log_idx:
-                    self.print_fn(f" > Example {idx} in the batch")
-                    self.print_fn(f"   > Prediction:   {predicted_text[idx]}")
-                    self.print_fn(f"   > Ground Truth: {ground_truth_text[idx]}")
-                    self.print_fn("")
+
+                    wandb.log({
+                        # "epoch": epoch + 1,
+                        # "batch_id": batch_id + 1,
+                        # "batch_example" : idx,
+                        "prediction": f'PRED: {predicted_text[idx]}. GT: {ground_truth_text[idx]}',
+                    })
+
+                    self.log_fn(f" > Example {idx} in the batch")
+                    self.log_fn(f"   > Prediction:   {predicted_text[idx]}")
+                    self.log_fn(f"   > Ground Truth: {ground_truth_text[idx]}")
+                    self.log_fn("")
             else:
-                self.print_fn("No labels found in batch. Check the batch structure.")
+                self.log_fn("No labels found in batch. Check the batch structure.")
         else:
-            self.print_fn(
+            self.log_fn(
                 "No logits found in model output. Check the model output structure."
             )
         self.model.train()
