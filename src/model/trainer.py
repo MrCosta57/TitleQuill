@@ -248,18 +248,16 @@ class Trainer:
 
         result_log = self.evaluator.compute()
 
-        # metric_log = {'eval_type': eval_type}
- 
-        # if eval_type == "val":
-        #     metric_log['epoch'] = epoch  # type: ignore - checked by assert
-
         metric_log = {}
- 
+
         for metric_name, result in result_log.items():
             self.log_fn(f"   > {metric_name.upper()}: {result}")
             self._history[eval_type][metric_name].append(result)
-            for value_name, value in result.items():
-                metric_log[f"{metric_name}_{value_name}"] = value
+            if type(result) == dict:
+                for value_name, value in result.items():
+                    metric_log[f"{metric_name}_{value_name}"] = value
+            else:
+                metric_log[metric_name] = result
         
         wandb.log(metric_log)
 
