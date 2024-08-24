@@ -89,6 +89,8 @@ class Trainer:
         )
         self.log_fn = loguru.logger.info
 
+        self.pred_table = wandb.Table(columns=["prediction", "ground_truth"])
+
         # Initialize history of losses and metrics
         self._history = {
             "train": {"loss": []},
@@ -149,6 +151,8 @@ class Trainer:
                         f" > Training batch {batch_id+1}/{len(train_dataloader)} ({round(batch_id+1 / len(train_dataloader) * 100, 2)}%) - Loss: {loss.item()}"
                     )
                     self._print_eval(batch, outputs, epoch, batch_id)
+
+                if batch_id == 100: break
 
             # Add epoch loss as average of batch losses
             self._history["train"]["loss"].append(sum(loss_batches) / len(loss_batches))
@@ -292,12 +296,10 @@ class Trainer:
 
                 for idx in log_idx:
 
-                    wandb.log({
-                        # "epoch": epoch + 1,
-                        # "batch_id": batch_id + 1,
-                        # "batch_example" : idx,
-                        "prediction": f'PRED: {predicted_text[idx]}. GT: {ground_truth_text[idx]}',
-                    })
+                    self.pred_table.add_data(
+                        predicted_text[idx], ground_truth_text[idx]
+                    )
+                    wandb.log({"pred_vs_target": self.pred_table})
 
                     self.log_fn(f" > Example {idx} in the batch")
                     self.log_fn(f"   > Prediction:   {predicted_text[idx]}")
