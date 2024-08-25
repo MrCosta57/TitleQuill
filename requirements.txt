@@ -14,4 +14,4 @@ loguru
 # TextRank requirements
 networkx
 editdistance
-scipy
+scikit-learn
