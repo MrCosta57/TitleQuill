@@ -16,7 +16,7 @@ from transformers import (
 
 @dataclass
 class OAGKXItemStats:
-    """Dataclass to represent an item in the OAGKX dataset - i.e. a line in the dataset file"""
+    """ Dataclass to represent an item in the OAGKX dataset - i.e. a line in the dataset file """
 
     title: str
     """ Title of the paper """
@@ -66,20 +66,13 @@ class OAGKXItemStats:
         abstract = json_item["abstract"]
         keywords_str = json_item["keywords"]
 
-        # Extract keywords
-        keywords = set(
-            [
-                keyword.strip()
-                for keyword in keywords_str.split(OAGKXItemStats._KEYWORDS_DELIMITER)
-            ]
-        )
+        return OAGKXItemStats.from_data(title=title, abstract=abstract, keywords_str=keywords_str)
 
-        return OAGKXItemStats(
-            title=title,
-            abstract=abstract,
-            keywords=keywords,
-        )
-
+    @property
+    def keywords_str(self) -> str:
+        """Returns the keywords as a string"""
+        return OAGKXItemStats._KEYWORDS_DELIMITER.join(self.keywords)
+    
     @property
     def keywords_in_abstract(self) -> Set[str]:
         """Returns the set of keywords that appear in the abstract"""
@@ -115,7 +108,7 @@ class OAGKXItemStats:
         return len(re.findall(r"\w+", self.abstract))
 
     def get_most_frequent_words(self, min_freq: int = 3) -> Dict[str, int]:
-        """Returns the k most frequent words in the abstract"""
+        """Returns most frequent words (stop words excluded) in the abstract with frequency >= min_freq"""
 
         # Extract words from the abstract
         words = re.findall(r"\w+", self.abstract)
@@ -203,7 +196,7 @@ def load_oagkx_dataset(
         )
         print_fn(f"Dataset loaded with {len(dataset)} samples.")  # type: ignore
         # Apply filter function
-        if filter_fn:
+        if filter_fn is not None:
             dataset = dataset.filter(filter_fn, batched=True)
             dataset.save_to_disk(os.path.join(data_dir, "filtered"))
 

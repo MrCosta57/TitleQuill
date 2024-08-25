@@ -3,11 +3,12 @@ import os
 import re
 from omegaconf import DictConfig, OmegaConf
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 from datasets import load_dataset
 import hydra
 import wandb
-from datamodule.dataset import filter_on_stats, load_oagkx_dataset
+from datamodule.dataset import OAGKXItemStats, filter_on_stats, load_oagkx_dataset
 from utils.evaluator import Evaluator
 from utils.general_utils import seed_everything
 
@@ -29,6 +30,7 @@ def main(cfg):
             tags=cfg.model.model_name,
             dir=cfg.logger.log_dir,
         )
+        pass
 
     device = torch.device(cfg.device)
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.model_type)
@@ -50,12 +52,11 @@ def main(cfg):
     print_fn("Starting Testing")
     print_fn(f" - Num Batches: {len(dataset)}")
     print_fn(f" - Device:      {device}")
-    for i, data in enumerate(dataset):
-        abstract = data["abstract"]  # type: ignore
-        title = data["title"]  # type: ignore
-        keywords = data["keywords"]  # type: ignore
+    for i, data in enumerate(tqdm(dataset)):
 
-        prompt = template_prompt + abstract
+        el = OAGKXItemStats.from_json(data)
+
+        prompt = template_prompt + el.abstract
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt},
@@ -77,20 +78,32 @@ def main(cfg):
         if match:
             pred_title = match.group(1).strip()
             pred_keywords = match.group(2).strip()
+            pred_keywords = pred_keywords.split(OAGKXItemStats._KEYWORDS_DELIMITER)
         else:
             # If "Keywords:" is not found, everything is before
             pred_title = response.strip()
-            pred_keywords = ""
+            pred_keywords = set()
 
         if i % cfg.log_interval == 0:
             print_fn(f"Batch {i+1}")
             print_fn(f"Prediction:\n{response}")
-            print_fn(f"TRUE title:\n{title}")
-            print_fn(f"TRUE keywords:\n{keywords}")
+            print_fn(f"TRUE title:\n{el.title}")
+            print_fn(f"TRUE keywords:\n{el.keywords}")
 
-        evaluator.add_batch(predicted=[pred_title], target=[title])
 
-    result_log = evaluator.compute()
+        labels = sorted(list(el.keywords.union(pred_keywords)))
+        pred_binary = [1 if label in pred_keywords else 0 for label in labels]
+        ref_binary = [1 if label in el.keywords else 0 for label in labels]
+
+        evaluator.add_batch_title(predicted=[pred_title], target=[el.title])
+        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
+
+        if i == 1: break
+
+    result_log = evaluator.compute_title()
+    print_fn(result_log)
+
+    result_log = evaluator.compute_keywords()
     print_fn(result_log)
 
 

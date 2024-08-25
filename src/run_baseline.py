@@ -1,3 +1,4 @@
+from typing import Dict
 from utils.evaluator import Evaluator
 from datamodule.dataset import OAGKXItemStats
 from tqdm import tqdm
@@ -7,28 +8,30 @@ eval_first_baseline = Evaluator()
 eval_second_baseline = Evaluator()
 eval_keywords_baseline = Evaluator()
 
-data_dir = "/Users/nicolaaggio/Desktop/UNI/TitleQuill/data/OAGKX"
+data_dir = "data/OAGKX"
 
 def main():
+
     dataset = load_oagkx_dataset(
         data_dir,
-        (.7,.15,.15),
         just_one_file=True,
-        verbose=True)
+        verbose=True
+    )
     
     for entry in tqdm(dataset['test'], desc="Evaluating Baseline"):
+
         item = OAGKXItemStats.from_json(entry)
 
         true_title = item.title
         true_keywords = item.keywords
 
-        first_baseline_title = item.sentence_with_more_keywords[0]
+        first_baseline_title, _ = item.sentence_with_more_keywords
         second_baseline_title = item.abstract_first_sentence
         baseline_keywords = set(item.get_most_frequent_words().keys())
 
-        labels = sorted(list(baseline_keywords.union(true_keywords)))
 
         # Convert lists to binary format
+        labels = sorted(list(baseline_keywords.union(true_keywords)))
         pred_binary = [1 if label in baseline_keywords else 0 for label in labels]
         ref_binary = [1 if label in true_keywords else 0 for label in labels]
 
@@ -41,13 +44,13 @@ def main():
     log_keywords = eval_keywords_baseline.compute_keywords()
 
     for metric_name, result in log_title_first.items():
-            print(f"Title - First Baseline   > {metric_name.upper()}: {result}")
+        print(f"Title - First Baseline   > {metric_name.upper()}: {result}")
 
     for metric_name, result in log_title_second.items():
-            print(f"Title - Second Baseline   > {metric_name.upper()}: {result}")
+        print(f"Title - Second Baseline   > {metric_name.upper()}: {result}")
 
     for metric_name, result in log_keywords.items():
-            print(f"Keywords   > {metric_name.upper()}: {result}")
+        print(f"Keywords   > {metric_name.upper()}: {result}")
     
 
 if __name__ == "__main__":
