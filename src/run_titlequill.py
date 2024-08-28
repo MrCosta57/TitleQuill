@@ -7,7 +7,7 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     PreTrainedModel,
 )
-from utils.general_utils import seed_everything
+from utils.general_utils import seed_everything, setup_nltk
 from utils.loss import hf_loss_fn, twotasks_ce_eisl_loss_fn
 from utils.evaluator import Evaluator
 from datamodule.dataset import (
@@ -27,14 +27,14 @@ load_dotenv()
 # (collate_fn, loss_fn, double_task_flag)
 TRAINING_STRATEGIES = {
     "combined_tasks": (custom_collate_seq2seq, hf_loss_fn, False),
-    "divided_tasks_ce_eisl": (
-        partial(custom_collate_seq2seq_2task, shuffle=False),
-        twotasks_ce_eisl_loss_fn,
-        True,
-    ),
-    "divided_tasks_shuffle": (
-        partial(custom_collate_seq2seq_2task, shuffle=True),
+    "combined_tasks_shuffle": (
+        partial(custom_collate_seq2seq, shuffle=True),
         hf_loss_fn,
+        False,
+    ),
+    "divided_tasks_ce_eisl": (
+        partial(custom_collate_seq2seq_2task),
+        twotasks_ce_eisl_loss_fn,
         True,
     ),
 }
@@ -42,6 +42,7 @@ TRAINING_STRATEGIES = {
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
 def main(cfg):
+    setup_nltk()
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
     assert cfg is not None
@@ -54,7 +55,7 @@ def main(cfg):
         wandb.login(key=os.getenv("WANDB_API_KEY"))
         wandb.init(
             project=cfg.logger.project,
-            tags=cfg.model.model_name,
+            tags=[cfg.model.model_name],
             dir=cfg.logger.log_dir,
         )
     assert cfg.model.strategy in TRAINING_STRATEGIES
@@ -76,7 +77,9 @@ def main(cfg):
         just_one_file=cfg.data.just_one_file,
         filter_fn=filter_on_stats,
     )
-    evaluator = Evaluator(cfg.eval_metrics)
+    evaluator = Evaluator(
+        metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
+    )
     trainer = Trainer(
         model=model,
         tokenizer=tokenizer,
@@ -86,6 +89,7 @@ def main(cfg):
         train_batch_size=cfg.model.train_batch_size,
         val_batch_size=cfg.model.val_batch_size,
         double_task=double_task,
+        log_wandb=True if cfg.get("logger") is not None else False,
         shuffle=True,
         max_length=cfg.model.max_length,
         max_new_tokens=cfg.model.max_new_tokens,
@@ -96,9 +100,7 @@ def main(cfg):
         log_interval=cfg.log_interval,
     )
 
-    history = trainer.train()
-    print("Training history:")
-    print(history)
+    trainer.train()
     trainer.save(cfg.output_dir)
     trainer.test()
 

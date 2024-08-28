@@ -3,11 +3,12 @@ defaults:
   - data: oagkx
   - hydra: default
   # For disable logging, set to null
-  - logger: wandb
+  - logger: null #wandb
   - model: null
 
 device: "cpu" #"cuda:0"
 log_interval: 100
-eval_metrics: ["rouge", "bleu", "meteor"]
+metrics_title: ["rouge", "bleu", "meteor"]
+metrics_keywords: ["f1", "precision", "recall"]
 seed: 123
 output_dir: "output"

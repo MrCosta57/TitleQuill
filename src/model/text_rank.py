@@ -8,13 +8,6 @@ import os
 # Code from https://github.com/davidadamojr/TextRank
 
 
-def setup_environment():
-    """Download required resources."""
-    nltk.download("punkt")
-    nltk.download("averaged_perceptron_tagger")
-    print("Completed resource downloads.")
-
-
 def filter_for_tags(tagged, tags=["NN", "JJ", "NNP"]):
     """Apply syntactic filters based on POS tags."""
     return [item for item in tagged if item[1] in tags]
@@ -36,8 +29,10 @@ def unique_everseen(iterable, key=None):
     seen_add = seen.add
     if key is None:
 
-        def key(x):
+        def inner_key(x):
             return x
+
+        key = inner_key
 
     for element in iterable:
         k = key(element)
@@ -65,7 +60,7 @@ def build_graph(nodes):
     return gr
 
 
-def extract_key_phrases(text):
+def extract_key_phrases(text: str):
     """Return a set of key phrases.
 
     :param text: A string.
@@ -90,11 +85,8 @@ def extract_key_phrases(text):
 
     # pageRank - initial value of 1.0, error tolerance of 0,0001,
     calculated_page_rank = nx.pagerank(graph, weight="weight")
-
     # most important words in ascending order of importance
-    keyphrases = sorted(
-        calculated_page_rank, key=calculated_page_rank.get, reverse=True
-    )
+    keyphrases = sorted(calculated_page_rank, key=calculated_page_rank.get, reverse=True)  # type: ignore
 
     # the number of keyphrases returned will be relative to the size of the
     # text (a third of the number of vertices)
@@ -126,20 +118,20 @@ def extract_key_phrases(text):
 
 
 def extract_sentences(
-    text, summary_length=100, clean_sentences=False, language="english"
+    text: str, summary_length=100, clean_sentences=False, language="english"
 ):
     """Return a paragraph formatted summary of the source text.
 
     :param text: A string.
     """
     sent_detector = nltk.data.load("tokenizers/punkt/" + language + ".pickle")
-    sentence_tokens = sent_detector.tokenize(text.strip())
+    sentence_tokens = sent_detector.tokenize(text.strip())  # type: ignore
     graph = build_graph(sentence_tokens)
 
     calculated_page_rank = nx.pagerank(graph, weight="weight")
 
     # most important sentences in ascending order of importance
-    sentences = sorted(calculated_page_rank, key=calculated_page_rank.get, reverse=True)
+    sentences = sorted(calculated_page_rank, key=calculated_page_rank.get, reverse=True)  # type: ignore
 
     # return a 100 word summary
     summary = " ".join(sentences)

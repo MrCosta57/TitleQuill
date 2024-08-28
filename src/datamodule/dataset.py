@@ -12,11 +12,12 @@ from transformers import (
     DataCollatorForSeq2Seq,
     PreTrainedTokenizer,
 )
+from utils.general_utils import split_keywords_by_comma
 
 
 @dataclass
-class OAGKXItemStats:
-    """ Dataclass to represent an item in the OAGKX dataset - i.e. a line in the dataset file """
+class OAGKXItem:
+    """Dataclass to represent an item in the OAGKX dataset - i.e. a line in the dataset file"""
 
     title: str
     """ Title of the paper """
@@ -29,7 +30,6 @@ class OAGKXItemStats:
 
     _KEYWORDS_DELIMITER = " , "
     _SENTENCE_DELIMITERS = r"[.!?]"
-    _STOPWORDS = set(stopwords.words("english"))
 
     def __str__(self) -> str:
         return f"Title: {self.title}\n\nAbstract: {self.abstract}\n\nKeywords: {self.keywords}"
@@ -38,27 +38,25 @@ class OAGKXItemStats:
         return str(self)
 
     @classmethod
-    def from_data(
-        cls, title: str, abstract: str, keywords_str: str
-    ) -> "OAGKXItemStats":
+    def from_data(cls, title: str, abstract: str, keywords_str: str) -> "OAGKXItem":
         """Parses a line from the dataset file and returns an OAGKXItem object"""
 
         # Extract keywords
         keywords = set(
             [
                 keyword.strip()
-                for keyword in keywords_str.split(OAGKXItemStats._KEYWORDS_DELIMITER)
+                for keyword in keywords_str.split(OAGKXItem._KEYWORDS_DELIMITER)
             ]
         )
 
-        return OAGKXItemStats(
+        return OAGKXItem(
             title=title,
             abstract=abstract,
             keywords=keywords,
         )
 
     @classmethod
-    def from_json(cls, json_item: Dict[str, str]) -> "OAGKXItemStats":
+    def from_json(cls, json_item: Dict[str, str]) -> "OAGKXItem":
         """Parses a line from the dataset file and returns an OAGKXItem object"""
 
         # Extract title and abstract
@@ -66,13 +64,15 @@ class OAGKXItemStats:
         abstract = json_item["abstract"]
         keywords_str = json_item["keywords"]
 
-        return OAGKXItemStats.from_data(title=title, abstract=abstract, keywords_str=keywords_str)
+        return OAGKXItem.from_data(
+            title=title, abstract=abstract, keywords_str=keywords_str
+        )
 
     @property
     def keywords_str(self) -> str:
         """Returns the keywords as a string"""
-        return OAGKXItemStats._KEYWORDS_DELIMITER.join(self.keywords)
-    
+        return OAGKXItem._KEYWORDS_DELIMITER.join(self.keywords)
+
     @property
     def keywords_in_abstract(self) -> Set[str]:
         """Returns the set of keywords that appear in the abstract"""
@@ -86,13 +86,13 @@ class OAGKXItemStats:
     @property
     def abstract_first_sentence(self) -> str:
         """Returns the first sentence of the abstract"""
-        return re.split(OAGKXItemStats._SENTENCE_DELIMITERS, self.abstract)[0]
+        return re.split(OAGKXItem._SENTENCE_DELIMITERS, self.abstract)[0]
 
     @property
     def sentence_with_more_keywords(self) -> Tuple[str, int]:
         # Find the sentence with the most keywords
         sentence = max(
-            re.split(OAGKXItemStats._SENTENCE_DELIMITERS, self.abstract),
+            re.split(OAGKXItem._SENTENCE_DELIMITERS, self.abstract),
             key=lambda sentence: len([kw for kw in self.keywords if kw in sentence]),
         )
         return sentence, len([kw for kw in self.keywords if kw in sentence])
@@ -110,10 +110,11 @@ class OAGKXItemStats:
     def get_most_frequent_words(self, min_freq: int = 3) -> Dict[str, int]:
         """Returns most frequent words (stop words excluded) in the abstract with frequency >= min_freq"""
 
+        stop_words = set(stopwords.words("english"))
         # Extract words from the abstract
         words = re.findall(r"\w+", self.abstract)
 
-        filtered_words = [word for word in words if word.lower() not in self._STOPWORDS]
+        filtered_words = [word for word in words if word.lower() not in stop_words]
 
         # Count the frequency of each word
         word_freq = Counter(filtered_words)
@@ -136,7 +137,7 @@ def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
 
     def filter_fn_aux(sample_triple):
         title, abstract, keywords = sample_triple
-        item = OAGKXItemStats.from_data(title, abstract, keywords)
+        item = OAGKXItem.from_data(title, abstract, keywords)
         abstract_words = item.abstract_word_count
         title_length = item.title_word_count
         keywords_count = len(item.keywords)
@@ -263,12 +264,21 @@ def custom_collate_seq2seq(
     max_length: int,
     input_format: str = "Generate title and keywords: {e}",
     output_format: str = "Title: {t}<sep>Keywords: {k}",
+    shuffle: bool = False,
 ):
     # batch is a list of dataset items
+    def shuffle_keywords(keywords: str) -> str:
+        SEP = " , "
+        """Shuffle keywords in a string."""
+        keywords_list = split_keywords_by_comma(keywords)
+        random.shuffle(keywords_list)
+        return SEP.join(keywords_list)
+
+    shuffle_fn = shuffle_keywords if shuffle else lambda x: x
     new_row = [
         apply_tokenization(
             input_format.format(e=item["abstract"]),
-            output_format.format(t=item["title"], k=item["keywords"]),
+            output_format.format(t=item["title"], k=shuffle_fn(item["keywords"])),
             tokenizer,
             max_length,
         )
@@ -293,17 +303,7 @@ def custom_collate_seq2seq_2task(
     input_format2: str = "Generate keywords: {e}",
     output_format1: str = "Title: {t}",
     output_format2: str = "Keywords: {k}",
-    shuffle: bool = False,
 ):
-
-    def shuffle_keywords(keywords: str) -> str:
-        SEP = " , "
-        """Shuffle keywords in a string."""
-        keywords_list = keywords.split(SEP)
-        random.shuffle(keywords_list)
-        return SEP.join(keywords_list)
-
-    shuffle_fn = shuffle_keywords if shuffle else lambda x: x
 
     # batch is a list of dataset items
     new_row = [
@@ -317,7 +317,7 @@ def custom_collate_seq2seq_2task(
     ] + [
         apply_tokenization(
             input_format2.format(e=item["abstract"]),
-            output_format2.format(k=shuffle_fn(item["keywords"])),
+            output_format2.format(k=item["keywords"]),
             tokenizer,
             max_length,
         )

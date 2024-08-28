@@ -7,7 +7,7 @@ import argparse
 from typing import Any, Counter, Dict
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FuncFormatter
-from dataset import load_oagkx_dataset, OAGKXItemStats
+from dataset import load_oagkx_dataset, OAGKXItem
 
 
 def line_plot(
@@ -106,21 +106,17 @@ def plot_stats(stats: Dict[str, Dict[int, int]], out_dir: str):
 def mapping_function(elements) -> Dict[str, Any]:
     stats = {
         "abstract_length": [
-            OAGKXItemStats.from_data(
+            OAGKXItem.from_data(
                 title="", abstract=a, keywords_str=""
             ).abstract_word_count
             for a in elements["abstract"]
         ],
         "title_length": [
-            OAGKXItemStats.from_data(
-                title=t, abstract="", keywords_str=""
-            ).title_word_count
+            OAGKXItem.from_data(title=t, abstract="", keywords_str="").title_word_count
             for t in elements["title"]
         ],
         "keywords_count": [
-            len(
-                OAGKXItemStats.from_data(title="", abstract="", keywords_str=k).keywords
-            )
+            len(OAGKXItem.from_data(title="", abstract="", keywords_str=k).keywords)
             for k in elements["keywords"]
         ],
         # 'keywords_in_abstract': len(item.keywords_in_abstract),

@@ -9,8 +9,9 @@ from transformers.optimization import Adafactor
 from torch.utils.data import DataLoader
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from datasets import DatasetDict
-from utils.general_utils import postprocess_validation_text
+from utils.general_utils import postprocess_validation_text, split_keywords_by_comma
 from utils.evaluator import Evaluator
+
 
 class Trainer:
 
@@ -28,6 +29,7 @@ class Trainer:
         collate_fn: Callable,
         loss_fn: Callable,
         evaluator: Evaluator,
+        log_wandb: bool = True,
         lr: float = 5e-4,
         sep_special_tokens: str = "<sep>",
         train_batch_size: int = 64,
@@ -45,6 +47,7 @@ class Trainer:
         # Model and Device
         self.device = torch.device(device)
         self.model = model.to(self.device)  # type: ignore
+        self.log_wandb = log_wandb
 
         # Tokenization
         self.tokenizer = tokenizer
@@ -75,29 +78,15 @@ class Trainer:
         self.optimizer = Adafactor(self.model.parameters(), lr=lr, relative_step=False)
         self.evaluator = evaluator
 
-    def train(self) -> Dict[str, Dict[str, List[float]]]:
-
+    def train(self):
         # Logging function
         # self.log_fn = lambda x: None
-        # self.log_fn = print
-        loguru.logger.add(
+        self.log_fn = print
+        """ loguru.logger.add(
             f"logs/training-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log",
             level="INFO",
         )
-        self.log_fn = loguru.logger.info
-
-        self.pred_table = wandb.Table(columns=["prediction", "ground_truth"])
-
-        # Initialize history of losses and metrics
-        self._history = {
-            "train": {"loss": []},
-            "val": {
-                metric_name: [] for metric_name in self.evaluator.get_metrics.keys()
-            },
-            "test": {
-                metric_name: [] for metric_name in self.evaluator.get_metrics.keys()
-            },
-        }
+        self.log_fn = loguru.logger.info """
 
         # Initialize metrics
         train_dataloader = DataLoader(
@@ -114,13 +103,16 @@ class Trainer:
 
         # Set model to training mode
         self.model.train()
+        train_global_step = 0
         for epoch in range(self.max_epochs):
-
-            wandb.log({"epoch": epoch + 1})
 
             self.log_fn(
                 f"Epoch {epoch + 1}/{self.max_epochs} ({round((epoch + 1) / self.max_epochs * 100, 2)}%)"
             )
+            if self.log_wandb:
+                self.train_pred_table = wandb.Table(
+                    columns=["prediction", "ground_truth"]
+                )
             loss_batches = []
             for batch_id, batch in enumerate(train_dataloader):
 
@@ -138,29 +130,29 @@ class Trainer:
                 loss_batches.append(loss.item())
                 # Log
                 if batch_id % self.log_interval == 0:
-                    
-                    wandb.log({
-                        #"batch": batch_id + 1, 
-                        "batch_loss": loss.item()
-                    })
-
+                    if self.log_wandb:
+                        wandb.log({"train/loss": loss.item()}, step=train_global_step)
                     self.log_fn(
                         f" > Training batch {batch_id+1}/{len(train_dataloader)} ({round(batch_id+1 / len(train_dataloader) * 100, 2)}%) - Loss: {loss.item()}"
                     )
-                    self._print_eval(batch, outputs, epoch, batch_id)
+                    self._print_eval_train(batch, outputs, epoch, batch_id)
 
+                train_global_step += 1
                 # if batch_id == 100: break
 
-            # Add epoch loss as average of batch losses
-            self._history["train"]["loss"].append(sum(loss_batches) / len(loss_batches))
-
-            wandb.log({"epoch_loss": self._history["train"]["loss"][-1]})
+            if self.log_wandb:
+                wandb.log(
+                    {"train/epoch_loss": sum(loss_batches) / len(loss_batches)},
+                    step=epoch,
+                )
+                wandb.log(
+                    {"train/pred_target_table": self.train_pred_table}, step=epoch
+                )
 
             # Perform validation
             self.validation(epoch=epoch)
 
         self.log_fn("Training completed")
-        return self._history
 
     def validation(self, epoch: int):
         val_dataloader = DataLoader(
@@ -191,11 +183,20 @@ class Trainer:
         self._common_eval(test_dataloader, "test")
 
     @torch.no_grad()
-    def _common_eval(self, dataloader: DataLoader, eval_type: Literal["val", "test"], epoch: Optional[int] = None):
+    def _common_eval(
+        self,
+        dataloader: DataLoader,
+        eval_type: Literal["val", "test"],
+        epoch: Optional[int] = None,
+    ):
 
         assert eval_type in ["val", "test"]
-        assert  epoch is not None and eval_type == "val" or\
-                epoch is     None and eval_type == "test"
+        assert (
+            epoch is not None
+            and eval_type == "val"
+            or epoch is None
+            and eval_type == "test"
+        )
 
         self.model.eval()
         if eval_type == "val":
@@ -206,6 +207,10 @@ class Trainer:
         self.log_fn(f" - Num Batches: {len(dataloader)}")
         self.log_fn(f" - Device:      {self.device}")
 
+        if self.log_wandb:
+            self.eval_pred_table = wandb.Table(
+                columns=["GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"]
+            )
         for i, batch in enumerate(dataloader):
             # Put batch on device
             batch = {k: v.to(self.device) for k, v in batch.items()}
@@ -234,8 +239,40 @@ class Trainer:
             decoded_preds, decoded_labels = postprocess_validation_text(
                 decoded_preds, decoded_labels
             )
-            # Add batch to metrics
-            self.evaluator.add_batch(decoded_preds, decoded_labels)
+
+            if self.double_task:
+                half_batch_len = len(batch["labels"]) // 2
+                pred_title = decoded_preds[0:half_batch_len]
+                pred_keywords = decoded_preds[half_batch_len:]
+                pred_keywords = [
+                    set(split_keywords_by_comma(kw)) for kw in pred_keywords
+                ]
+                target_title = decoded_labels[0:half_batch_len]
+                target_keywords = decoded_labels[half_batch_len:]
+                target_keywords = [
+                    set(split_keywords_by_comma(kw)) for kw in target_keywords
+                ]
+            else:
+                pred_split = self.evaluator.split_title_keywords(decoded_preds)
+                target_split = self.evaluator.split_title_keywords(decoded_labels)
+                pred_title, pred_keywords = zip(*pred_split)
+                target_title, target_keywords = zip(*target_split)
+
+            bin_keywords_list = self.evaluator.binary_labels_keywords(
+                target_keywords=target_keywords, pred_keywords=pred_keywords
+            )
+            ref_binary, pred_binary = zip(*bin_keywords_list)
+            self.evaluator.add_batch_title(predicted=pred_title, target=target_title)
+            self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
+
+            if i % self.log_interval == 0:
+                if self.log_wandb:
+                    self.eval_pred_table.add_data(
+                        target_title[0],
+                        pred_title[0],
+                        target_keywords[0],
+                        pred_keywords[0],
+                    )
 
         # Compute metrics
         if eval_type == "val":
@@ -243,26 +280,30 @@ class Trainer:
         else:
             self.log_fn(" > Test Scores: ")
 
-        result_log = self.evaluator.compute()
-
-        metric_log = {}
-
-        for metric_name, result in result_log.items():
-            self.log_fn(f"   > {metric_name.upper()}: {result}")
-            self._history[eval_type][metric_name].append(result)
-            if type(result) == dict:
-                for value_name, value in result.items():
-                    metric_log[f"{metric_name}_{value_name}"] = value
+        results_title = self.evaluator.compute_title()
+        results_keywords = self.evaluator.compute_keywords()
+        if self.log_wandb:
+            if eval_type == "val":
+                wandb.log({"val/eval_table": self.eval_pred_table})
+                wandb.log({"val/title_metrics": results_title}, step=epoch)
+                wandb.log({"val/keywords_metrics": results_keywords}, step=epoch)
             else:
-                metric_log[metric_name] = result
-        
-        wandb.log(metric_log)
+                wandb.log({"test/eval_table": self.eval_pred_table})
+                wandb.log({"test/title_metrics": results_title})
+                wandb.log({"test/keywords_metrics": results_keywords})
+
+        self.log_fn(" > Title Metrics: ")
+        for metric_name, metric_value in results_title.items():
+            self.log_fn(f"   > {metric_name}: {metric_value}")
+        self.log_fn(" > Keywords Metrics: ")
+        for metric_name, metric_value in results_keywords.items():
+            self.log_fn(f"   > {metric_name}: {metric_value}")
 
         self.log_fn("")
         self.model.train()
 
     @torch.no_grad()
-    def _print_eval(self, batch, outputs, epoch, batch_id):
+    def _print_eval_train(self, batch, outputs, epoch, batch_id):
         self.model.eval()
         if "logits" in outputs:
             # For seq2seq models like T5, the logits usually correspond to decoder outputs
@@ -290,11 +331,10 @@ class Trainer:
                 log_idx = [0, (len(predicted_text) + 1) // 2]
 
                 for idx in log_idx:
-
-                    self.pred_table.add_data(
-                        predicted_text[idx], ground_truth_text[idx]
-                    )
-                    wandb.log({"pred_vs_target": self.pred_table})
+                    if self.log_wandb:
+                        self.train_pred_table.add_data(
+                            predicted_text[idx], ground_truth_text[idx]
+                        )
 
                     self.log_fn(f" > Example {idx} in the batch")
                     self.log_fn(f"   > Prediction:   {predicted_text[idx]}")

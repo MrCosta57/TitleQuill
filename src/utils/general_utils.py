@@ -3,10 +3,15 @@ import numpy as np
 import random
 import torch.nn.functional as F
 import nltk
+import re
 
-nltk.download("punkt", quiet=True)
-nltk.download("omw-1.4", quiet=True)
-nltk.download("wordnet", quiet=True)
+
+def setup_nltk():
+    nltk.download("punkt", quiet=True)
+    nltk.download("averaged_perceptron_tagger", quiet=True)
+    nltk.download("omw-1.4", quiet=True)
+    nltk.download("wordnet", quiet=True)
+    nltk.download("stopwords", quiet=True)
 
 
 def seed_everything(seed: int = 123):
@@ -27,3 +32,8 @@ def postprocess_validation_text(preds, labels):
     labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
 
     return preds, labels
+
+
+def split_keywords_by_comma(text: str):
+    text = re.sub(r"^Keywords:\s*", "", text)
+    return re.split(r"\s*,\s*", text)

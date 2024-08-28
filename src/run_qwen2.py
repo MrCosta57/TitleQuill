@@ -8,13 +8,14 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
 from datasets import load_dataset
 import hydra
 import wandb
-from datamodule.dataset import OAGKXItemStats, filter_on_stats, load_oagkx_dataset
+from datamodule.dataset import OAGKXItem, filter_on_stats, load_oagkx_dataset
 from utils.evaluator import Evaluator
-from utils.general_utils import seed_everything
+from utils.general_utils import seed_everything, setup_nltk
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
 def main(cfg):
+    setup_nltk()
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
     assert cfg is not None
@@ -22,15 +23,15 @@ def main(cfg):
         conf = OmegaConf.load("configs/model/qwen2.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
-    if cfg.get("logger") != None:
+    log_wandb: bool = cfg.get("logger") != None
+    if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
         wandb.init(
             project=cfg.logger.project,
-            tags=cfg.model.model_name,
+            tags=[cfg.model.model_name],
             dir=cfg.logger.log_dir,
         )
-        pass
 
     device = torch.device(cfg.device)
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.model_type)
@@ -48,15 +49,29 @@ def main(cfg):
         The abstract is:"
     print_fn = print
 
-    evaluator = Evaluator(cfg.eval_metrics)
+    evaluator = Evaluator(
+        metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
+    )
     print_fn("Starting Testing")
     print_fn(f" - Num Batches: {len(dataset)}")
     print_fn(f" - Device:      {device}")
-    for i, data in enumerate(tqdm(dataset)):
 
-        el = OAGKXItemStats.from_json(data)
+    eval_table = None
+    if log_wandb:
+        eval_table = wandb.Table(
+            columns=[
+                "GT_Title",
+                "Pred_Title",
+                "GT_Keywords",
+                "Pred_Keywords",
+            ]
+        )
+    for i, data in enumerate(dataset):
+        abstract = data["abstract"]  # type: ignore
+        title = data["title"]  # type: ignore
+        keywords = data["keywords"]  # type: ignore
 
-        prompt = template_prompt + el.abstract
+        prompt = template_prompt + abstract  # type: ignore
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt},
@@ -74,37 +89,55 @@ def main(cfg):
         ]
         response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-        match = re.match(r"(.*)Keywords:\s*(.*)", response)
-        if match:
-            pred_title = match.group(1).strip()
-            pred_keywords = match.group(2).strip()
-            pred_keywords = pred_keywords.split(OAGKXItemStats._KEYWORDS_DELIMITER)
-        else:
-            # If "Keywords:" is not found, everything is before
-            pred_title = response.strip()
-            pred_keywords = set()
+        pred_split = evaluator.split_title_keywords([response])
+        pred_title, pred_keywords = zip(*pred_split)
+
+        bin_keywords_list = evaluator.binary_labels_keywords(
+            target_keywords=[keywords], pred_keywords=pred_keywords
+        )
+        pred_binary, ref_binary = zip(*bin_keywords_list)
+
+        evaluator.add_batch_title(predicted=[pred_title], target=[title])
+        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
             print_fn(f"Batch {i+1}")
             print_fn(f"Prediction:\n{response}")
-            print_fn(f"TRUE title:\n{el.title}")
-            print_fn(f"TRUE keywords:\n{el.keywords}")
+            print_fn(f"TRUE title:\n{title}")
+            print_fn(f"TRUE keywords:\n{keywords}")
 
+            if log_wandb and eval_table is not None:
+                eval_table.add_data(
+                    title,
+                    pred_title,
+                    keywords,
+                    pred_keywords,
+                )
 
-        labels = sorted(list(el.keywords.union(pred_keywords)))
-        pred_binary = [1 if label in pred_keywords else 0 for label in labels]
-        ref_binary = [1 if label in el.keywords else 0 for label in labels]
+    result_title = evaluator.compute_title()
+    print_fn("Title metrics:")
+    print_fn(result_title)
 
-        evaluator.add_batch_title(predicted=[pred_title], target=[el.title])
-        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
+    result_keywords = evaluator.compute_keywords()
+    print_fn("Keywords metrics:")
+    print_fn(result_keywords)
 
-        if i == 1: break
-
-    result_log = evaluator.compute_title()
-    print_fn(result_log)
-
-    result_log = evaluator.compute_keywords()
-    print_fn(result_log)
+    if log_wandb:
+        wandb.log(
+            {
+                "test/eval_table": eval_table,
+            }
+        )
+        wandb.log(
+            {
+                "test/title": result_title,
+            }
+        )
+        wandb.log(
+            {
+                "test/keywords": result_keywords,
+            }
+        )
 
 
 if __name__ == "__main__":

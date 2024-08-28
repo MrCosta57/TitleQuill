@@ -4,14 +4,15 @@ from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 import wandb
 
-from datamodule.dataset import OAGKXItemStats, filter_on_stats, load_oagkx_dataset
-from model.text_rank import get_title_and_keywords, setup_environment
+from datamodule.dataset import OAGKXItem, filter_on_stats, load_oagkx_dataset
+from model.text_rank import get_title_and_keywords
 from utils.evaluator import Evaluator
-from utils.general_utils import seed_everything
+from utils.general_utils import seed_everything, setup_nltk
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
 def main(cfg):
+    setup_nltk()
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
     assert cfg is not None
@@ -19,58 +20,80 @@ def main(cfg):
         conf = OmegaConf.load("configs/model/textrank.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
-    
-    if cfg.get("logger") != None:
-
+    log_wandb: bool = cfg.get("logger") != None
+    if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
         wandb.init(
             project=cfg.logger.project,
-            tags=cfg.model.model_name,
+            tags=[cfg.model.model_name],
             dir=cfg.logger.log_dir,
         )
-        pass
 
-    setup_environment()
     dataset_dict = load_oagkx_dataset(
         data_dir=cfg.data.data_dir,
         split_size=tuple(cfg.data.split_size),
         just_one_file=cfg.data.just_one_file,
-        # filter_fn=filter_on_stats,
+        filter_fn=filter_on_stats,
     )
     dataset = dataset_dict["test"]
     print_fn = print
 
-    evaluator = Evaluator(cfg.eval_metrics)
-    
+    evaluator = Evaluator(
+        metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
+    )
+
     print_fn("Starting Testing")
     print_fn(f" - Num Batches: {len(dataset)}")
-    for i, data in enumerate(tqdm(dataset)):
+    eval_table = None
+    if log_wandb:
+        eval_table = wandb.Table(
+            columns=[
+                "GT_Title",
+                "Predicted Title",
+                "GT_Keywords",
+                "Predicted Keywords",
+            ]
+        )
+    for i, data in enumerate(dataset):
 
-        el = OAGKXItemStats.from_json(data)
+        item = OAGKXItem.from_json(data)  # type: ignore
 
-        pred_title, pred_keywords = get_title_and_keywords(el.abstract)
+        pred_title, pred_keywords = get_title_and_keywords(item.abstract)
+
+        evaluator.add_batch_title(predicted=[pred_title], target=[item.title])
+        pred_binary, ref_binary = evaluator.binary_labels_keywords(
+            [item.keywords], [pred_keywords]
+        )
+        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
             print_fn(f"Batch {i+1}")
             print_fn(f"Predicted title:\n{pred_title}")
-            print_fn(f"TRUE title:\n{el.title}")
+            print_fn(f"TRUE title:\n{item.title}")
             print_fn(f"Predicted keywords:\n{pred_keywords}")
-            print_fn(f"TRUE keywords:\n{el.keywords_str}")
+            print_fn(f"TRUE keywords:\n{item.keywords_str}")
 
-        evaluator.add_batch_title(predicted=[pred_title], target=[el.title])
-
-        labels = sorted(list(el.keywords.union(pred_keywords)))
-        pred_binary = [1 if label in pred_keywords else 0 for label in labels]
-        ref_binary = [1 if label in el.keywords else 0 for label in labels]
-
-        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
+            if log_wandb and eval_table is not None:
+                eval_table.add_data(
+                    item.title,
+                    pred_title,
+                    item.keywords_str,
+                    pred_keywords,
+                )
 
     result_log_title = evaluator.compute_title()
+    print_fn("Title metrics:")
     print_fn(result_log_title)
 
     result_log_keywords = evaluator.compute_keywords()
+    print_fn("Keywords metrics:")
     print_fn(result_log_keywords)
+
+    if log_wandb:
+        wandb.log({"test/eval_table": eval_table})
+        wandb.log("test/title", result_log_title)
+        wandb.log("test/keywords", result_log_keywords)
 
 
 if __name__ == "__main__":
