@@ -14,4 +14,8 @@ source .venv/bin/activate
 
 export HF_HOME=".cache/huggingface"
 export HF_DATASETS_DISABLE_PROGRESS_BARS=1
+
+#python3 -u src/run_baseline.py
+#python3 -u src/run_qwen2.py
+#python3 -u src/run_textrank.py
 python3 -u src/run_titlequill.py

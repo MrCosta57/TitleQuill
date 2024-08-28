@@ -20,7 +20,7 @@ def main(cfg):
         conf = OmegaConf.load("configs/model/textrank.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
-    log_wandb: bool = cfg.get("logger") != None
+    log_wandb: bool = cfg.get("logger") is not None
     if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
@@ -28,6 +28,11 @@ def main(cfg):
             project=cfg.logger.project,
             tags=[cfg.model.model_name],
             dir=cfg.logger.log_dir,
+            config={
+                k: v
+                for k, v in cfg["model"].items()
+                if k != "model_name" and k != "model_type"
+            },
         )
 
     dataset_dict = load_oagkx_dataset(
@@ -58,29 +63,37 @@ def main(cfg):
     for i, data in enumerate(dataset):
 
         item = OAGKXItem.from_json(data)  # type: ignore
+        abstract = item.abstract
+        title = item.title
+        keywords = item.keywords
 
-        pred_title, pred_keywords = get_title_and_keywords(item.abstract)
+        pred_title, pred_keywords = get_title_and_keywords(abstract)
 
-        evaluator.add_batch_title(predicted=[pred_title], target=[item.title])
-        pred_binary, ref_binary = evaluator.binary_labels_keywords(
-            [item.keywords], [pred_keywords]
+        evaluator.add_batch_title(predicted=[pred_title], target=[title])
+
+        bin_keywords_list = Evaluator.binary_labels_keywords(
+            [keywords], [pred_keywords]
         )
+        pred_binary, ref_binary = zip(*bin_keywords_list)
+
         evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
             print_fn(f"Batch {i+1}")
             print_fn(f"Predicted title:\n{pred_title}")
-            print_fn(f"TRUE title:\n{item.title}")
+            print_fn(f"TRUE title:\n{title}")
             print_fn(f"Predicted keywords:\n{pred_keywords}")
-            print_fn(f"TRUE keywords:\n{item.keywords_str}")
+            print_fn(f"TRUE keywords:\n{keywords}")
 
             if log_wandb and eval_table is not None:
                 eval_table.add_data(
-                    item.title,
+                    title,
                     pred_title,
-                    item.keywords_str,
-                    pred_keywords,
+                    " , ".join(keywords),
+                    " , ".join(pred_keywords),
                 )
+
+        break
 
     result_log_title = evaluator.compute_title()
     print_fn("Title metrics:")
@@ -92,8 +105,8 @@ def main(cfg):
 
     if log_wandb:
         wandb.log({"test/eval_table": eval_table})
-        wandb.log("test/title", result_log_title)
-        wandb.log("test/keywords", result_log_keywords)
+        wandb.log({"test/title": result_log_title})
+        wandb.log({"test/keywords": result_log_keywords})
 
 
 if __name__ == "__main__":

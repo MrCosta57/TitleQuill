@@ -42,12 +42,7 @@ class OAGKXItem:
         """Parses a line from the dataset file and returns an OAGKXItem object"""
 
         # Extract keywords
-        keywords = set(
-            [
-                keyword.strip()
-                for keyword in keywords_str.split(OAGKXItem._KEYWORDS_DELIMITER)
-            ]
-        )
+        keywords = set(split_keywords_by_comma(keywords_str))
 
         return OAGKXItem(
             title=title,

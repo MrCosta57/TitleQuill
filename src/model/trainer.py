@@ -101,18 +101,16 @@ class Trainer:
             shuffle=self.shuffle,
         )
 
+        if self.log_wandb:
+            self.train_pred_table = wandb.Table(
+                columns=["epoch", "prediction", "ground_truth"]
+            )
+
         # Set model to training mode
         self.model.train()
-        train_global_step = 0
         for epoch in range(self.max_epochs):
 
-            self.log_fn(
-                f"Epoch {epoch + 1}/{self.max_epochs} ({round((epoch + 1) / self.max_epochs * 100, 2)}%)"
-            )
-            if self.log_wandb:
-                self.train_pred_table = wandb.Table(
-                    columns=["prediction", "ground_truth"]
-                )
+            self.log_fn(f"Epoch {epoch + 1}/{self.max_epochs}")
             loss_batches = []
             for batch_id, batch in enumerate(train_dataloader):
 
@@ -131,27 +129,24 @@ class Trainer:
                 # Log
                 if batch_id % self.log_interval == 0:
                     if self.log_wandb:
-                        wandb.log({"train/loss": loss.item()}, step=train_global_step)
+                        wandb.log({"train/loss": loss.item()})
                     self.log_fn(
-                        f" > Training batch {batch_id+1}/{len(train_dataloader)} ({round(batch_id+1 / len(train_dataloader) * 100, 2)}%) - Loss: {loss.item()}"
+                        f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
                     self._print_eval_train(batch, outputs, epoch, batch_id)
 
-                train_global_step += 1
+                break
                 # if batch_id == 100: break
 
             if self.log_wandb:
-                wandb.log(
-                    {"train/epoch_loss": sum(loss_batches) / len(loss_batches)},
-                    step=epoch,
-                )
-                wandb.log(
-                    {"train/pred_target_table": self.train_pred_table}, step=epoch
-                )
+                wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches)})
 
             # Perform validation
             self.validation(epoch=epoch)
+            break
 
+        if self.log_wandb:
+            wandb.log({"train/train_pred_table": self.train_pred_table})
         self.log_fn("Training completed")
 
     def validation(self, epoch: int):
@@ -253,12 +248,12 @@ class Trainer:
                     set(split_keywords_by_comma(kw)) for kw in target_keywords
                 ]
             else:
-                pred_split = self.evaluator.split_title_keywords(decoded_preds)
-                target_split = self.evaluator.split_title_keywords(decoded_labels)
+                pred_split = Evaluator.split_title_keywords(decoded_preds)
+                target_split = Evaluator.split_title_keywords(decoded_labels)
                 pred_title, pred_keywords = zip(*pred_split)
                 target_title, target_keywords = zip(*target_split)
 
-            bin_keywords_list = self.evaluator.binary_labels_keywords(
+            bin_keywords_list = Evaluator.binary_labels_keywords(
                 target_keywords=target_keywords, pred_keywords=pred_keywords
             )
             ref_binary, pred_binary = zip(*bin_keywords_list)
@@ -266,13 +261,15 @@ class Trainer:
             self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
             if i % self.log_interval == 0:
+                self.log_fn(f"Batch {i} completed")
                 if self.log_wandb:
                     self.eval_pred_table.add_data(
                         target_title[0],
                         pred_title[0],
-                        target_keywords[0],
-                        pred_keywords[0],
+                        " , ".join(target_keywords[0]),
+                        " , ".join(pred_keywords[0]),
                     )
+            break
 
         # Compute metrics
         if eval_type == "val":
@@ -285,8 +282,8 @@ class Trainer:
         if self.log_wandb:
             if eval_type == "val":
                 wandb.log({"val/eval_table": self.eval_pred_table})
-                wandb.log({"val/title_metrics": results_title}, step=epoch)
-                wandb.log({"val/keywords_metrics": results_keywords}, step=epoch)
+                wandb.log({"val/title_metrics": results_title})
+                wandb.log({"val/keywords_metrics": results_keywords})
             else:
                 wandb.log({"test/eval_table": self.eval_pred_table})
                 wandb.log({"test/title_metrics": results_title})
@@ -333,7 +330,7 @@ class Trainer:
                 for idx in log_idx:
                     if self.log_wandb:
                         self.train_pred_table.add_data(
-                            predicted_text[idx], ground_truth_text[idx]
+                            epoch, predicted_text[idx], ground_truth_text[idx]
                         )
 
                     self.log_fn(f" > Example {idx} in the batch")

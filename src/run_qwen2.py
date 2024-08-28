@@ -1,14 +1,10 @@
-import glob
 import os
-import re
 from omegaconf import DictConfig, OmegaConf
 import torch
-from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedModel
-from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import hydra
 import wandb
-from datamodule.dataset import OAGKXItem, filter_on_stats, load_oagkx_dataset
+from datamodule.dataset import filter_on_stats, load_oagkx_dataset, OAGKXItem
 from utils.evaluator import Evaluator
 from utils.general_utils import seed_everything, setup_nltk
 
@@ -23,7 +19,7 @@ def main(cfg):
         conf = OmegaConf.load("configs/model/qwen2.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
-    log_wandb: bool = cfg.get("logger") != None
+    log_wandb: bool = cfg.get("logger") is not None
     if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
@@ -31,6 +27,11 @@ def main(cfg):
             project=cfg.logger.project,
             tags=[cfg.model.model_name],
             dir=cfg.logger.log_dir,
+            config={
+                k: v
+                for k, v in cfg["model"].items()
+                if k != "model_name" and k != "model_type"
+            },
         )
 
     device = torch.device(cfg.device)
@@ -44,7 +45,7 @@ def main(cfg):
     )
     dataset = dataset_dict["test"]
     # Encode input prompt
-    template_prompt = "Generate the title and the keywords from the below abstract. Do not add any other information.\
+    template_prompt = "Generate the title and the keywords from the below abstract. Do not add any other information and separate the keywords by the comma character.\
         Output must be in the format:\nTitle: [title]\nKeywords: [keywords]\n\
         The abstract is:"
     print_fn = print
@@ -66,12 +67,16 @@ def main(cfg):
                 "Pred_Keywords",
             ]
         )
-    for i, data in enumerate(dataset):
-        abstract = data["abstract"]  # type: ignore
-        title = data["title"]  # type: ignore
-        keywords = data["keywords"]  # type: ignore
 
-        prompt = template_prompt + abstract  # type: ignore
+    model = model.to(device)
+    model.eval()
+    for i, data in enumerate(dataset):
+        item = OAGKXItem.from_json(data)  # type: ignore
+        abstract = item.abstract
+        title = "Title: " + item.title
+        keywords = item.keywords
+
+        prompt = template_prompt + abstract
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt},
@@ -89,11 +94,13 @@ def main(cfg):
         ]
         response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
-        pred_split = evaluator.split_title_keywords([response])
+        pred_split = Evaluator.split_title_keywords([response])
         pred_title, pred_keywords = zip(*pred_split)
+        pred_title = pred_title[0]
+        pred_keywords = pred_keywords[0]
 
-        bin_keywords_list = evaluator.binary_labels_keywords(
-            target_keywords=[keywords], pred_keywords=pred_keywords
+        bin_keywords_list = Evaluator.binary_labels_keywords(
+            target_keywords=[keywords], pred_keywords=[pred_keywords]
         )
         pred_binary, ref_binary = zip(*bin_keywords_list)
 
@@ -110,9 +117,11 @@ def main(cfg):
                 eval_table.add_data(
                     title,
                     pred_title,
-                    keywords,
-                    pred_keywords,
+                    " , ".join(keywords),
+                    " , ".join(pred_keywords),
                 )
+
+        break
 
     result_title = evaluator.compute_title()
     print_fn("Title metrics:")

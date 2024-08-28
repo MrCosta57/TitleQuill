@@ -1,7 +1,6 @@
 from functools import partial
 import os
 import torch
-from torch.utils.data import DataLoader
 from transformers import (
     AutoTokenizer,
     AutoModelForSeq2SeqLM,
@@ -50,13 +49,19 @@ def main(cfg):
         conf = OmegaConf.load("configs/model/titlequill.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
-    if cfg.get("logger") is not None:
+    log_wandb: bool = cfg.get("logger") is not None
+    if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
         wandb.init(
             project=cfg.logger.project,
             tags=[cfg.model.model_name],
             dir=cfg.logger.log_dir,
+            config={
+                k: v
+                for k, v in cfg["model"].items()
+                if k != "model_name" and k != "model_type"
+            },
         )
     assert cfg.model.strategy in TRAINING_STRATEGIES
     assert len(cfg.data.split_size) == 3
