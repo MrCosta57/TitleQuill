@@ -129,24 +129,27 @@ class Trainer:
                 # Log
                 if batch_id % self.log_interval == 0:
                     if self.log_wandb:
-                        wandb.log({"train/loss": loss.item()})
+                        wandb.log({"train/loss": loss.item()}, step=epoch * len(train_dataloader) + batch_id)
                     self.log_fn(
                         f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
                     self._print_eval_train(batch, outputs, epoch, batch_id)
 
-                break
-                # if batch_id == 100: break
+                # TODO REMOVE JUST FOR TESTING
+                if batch_id == 10: break
 
             if self.log_wandb:
-                wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches)})
+                wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches)}, step=epoch)
 
             # Perform validation
             self.validation(epoch=epoch)
-            break
+
+            # TODO REMOVE JUST FOR TESTING
+            if epoch == 2: break
 
         if self.log_wandb:
             wandb.log({"train/train_pred_table": self.train_pred_table})
+        
         self.log_fn("Training completed")
 
     def validation(self, epoch: int):
@@ -250,7 +253,7 @@ class Trainer:
             else:
                 pred_split = Evaluator.split_title_keywords(decoded_preds)
                 target_split = Evaluator.split_title_keywords(decoded_labels)
-                pred_title, pred_keywords = zip(*pred_split)
+                pred_title, prsteped_keywords = zip(*pred_split)
                 target_title, target_keywords = zip(*target_split)
 
             bin_keywords_list = Evaluator.binary_labels_keywords(
@@ -269,7 +272,9 @@ class Trainer:
                         " , ".join(target_keywords[0]),
                         " , ".join(pred_keywords[0]),
                     )
-            break
+
+            # TODO REMOVE JUST FOR TESTING
+            if i == 10: break
 
         # Compute metrics
         if eval_type == "val":
@@ -281,13 +286,13 @@ class Trainer:
         results_keywords = self.evaluator.compute_keywords()
         if self.log_wandb:
             if eval_type == "val":
-                wandb.log({"val/eval_table": self.eval_pred_table})
-                wandb.log({"val/title_metrics": results_title})
-                wandb.log({"val/keywords_metrics": results_keywords})
+                wandb.log({"val/eval_table": self.eval_pred_table}, step=epoch)
+                wandb.log({"val/title_metrics": results_title}, step=epoch)
+                wandb.log({"val/keywords_metrics": results_keywords}, step=epoch)
             else:
-                wandb.log({"test/eval_table": self.eval_pred_table})
-                wandb.log({"test/title_metrics": results_title})
-                wandb.log({"test/keywords_metrics": results_keywords})
+                wandb.log({"test/eval_table": self.eval_pred_table}, step=1)
+                wandb.log({"test/title_metrics": results_title}, step=1)
+                wandb.log({"test/keywords_metrics": results_keywords}, step=1)
 
         self.log_fn(" > Title Metrics: ")
         for metric_name, metric_value in results_title.items():
