@@ -1,4 +1,5 @@
 from datetime import datetime
+import itertools
 import os
 from typing import Callable, Dict, List, Literal, Optional, Tuple
 import loguru
@@ -88,6 +89,14 @@ class Trainer:
         )
         self.log_fn = loguru.logger.info """
 
+        # Define step metrics
+        wandb.define_metric("train/loss", step_metric="train_loss_step")
+        wandb.define_metric("train/epoch_loss", step_metric="train_epoch_loss_step")
+
+        # Define a metric for each metric
+        for eval_type, metric_name in itertools.product(['val', 'test'], self.evaluator.get_metric_names):
+            wandb.define_metric(f'{eval_type}/{metric_name}', step_metric=f"{eval_type}_{metric_name}_step")
+
         # Initialize metrics
         train_dataloader = DataLoader(
             self.dataset_dict["train"],  # type: ignore - interface compatibility
@@ -104,6 +113,12 @@ class Trainer:
         if self.log_wandb:
             self.train_pred_table = wandb.Table(
                 columns=["epoch", "prediction", "ground_truth"]
+            )
+            self.val_pred_table = wandb.Table(
+                columns=["epoch", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"]
+            )
+            self.test_pred_table = wandb.Table(
+                columns=["epoch", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"]
             )
 
         # Set model to training mode
@@ -127,29 +142,32 @@ class Trainer:
                 # Add batch loss
                 loss_batches.append(loss.item())
                 # Log
+                # # TODO REMOVE 
+                # if batch_id % 5 == 0:
                 if batch_id % self.log_interval == 0:
                     if self.log_wandb:
-                        wandb.log({"train/loss": loss.item()}, step=epoch * len(train_dataloader) + batch_id)
+                        wandb.log({"train/loss": loss.item(), 'train_loss_step': epoch * len(train_dataloader) + batch_id})
                     self.log_fn(
                         f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
-                    self._print_eval_train(batch, outputs, epoch, batch_id)
+                    self._print_eval_train(batch, outputs, epoch)
 
-                # TODO REMOVE JUST FOR TESTING
-                if batch_id == 10: break
+                # # TODO REMOVE JUST FOR TESTING
+                # if batch_id == 20: break
 
             if self.log_wandb:
-                wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches)}, step=epoch)
+                wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches), 'train_epoch_loss_step': epoch})
 
             # Perform validation
             self.validation(epoch=epoch)
 
-            # TODO REMOVE JUST FOR TESTING
-            if epoch == 2: break
+            # # TODO REMOVE JUST FOR TESTING
+            # if epoch == 10: break
 
         if self.log_wandb:
             wandb.log({"train/train_pred_table": self.train_pred_table})
-        
+            wandb.log({"val/val_pred_table": self.val_pred_table})
+
         self.log_fn("Training completed")
 
     def validation(self, epoch: int):
@@ -179,6 +197,8 @@ class Trainer:
             shuffle=False,
         )
         self._common_eval(test_dataloader, "test")
+        if self.log_wandb:
+            wandb.log({"test/test_pred_table": self.test_pred_table})
 
     @torch.no_grad()
     def _common_eval(
@@ -205,10 +225,7 @@ class Trainer:
         self.log_fn(f" - Num Batches: {len(dataloader)}")
         self.log_fn(f" - Device:      {self.device}")
 
-        if self.log_wandb:
-            self.eval_pred_table = wandb.Table(
-                columns=["GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"]
-            )
+
         for i, batch in enumerate(dataloader):
             # Put batch on device
             batch = {k: v.to(self.device) for k, v in batch.items()}
@@ -253,7 +270,7 @@ class Trainer:
             else:
                 pred_split = Evaluator.split_title_keywords(decoded_preds)
                 target_split = Evaluator.split_title_keywords(decoded_labels)
-                pred_title, prsteped_keywords = zip(*pred_split)
+                pred_title, pred_keywords = zip(*pred_split)
                 target_title, target_keywords = zip(*target_split)
 
             bin_keywords_list = Evaluator.binary_labels_keywords(
@@ -263,18 +280,24 @@ class Trainer:
             self.evaluator.add_batch_title(predicted=pred_title, target=target_title)
             self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
+            # # TODO Remove
+            # if i % 10 == 0:
             if i % self.log_interval == 0:
                 self.log_fn(f"Batch {i} completed")
                 if self.log_wandb:
-                    self.eval_pred_table.add_data(
+
+                    table = self.val_pred_table if eval_type == "val" else self.test_pred_table
+
+                    table.add_data(
+                        epoch,
                         target_title[0],
                         pred_title[0],
                         " , ".join(target_keywords[0]),
                         " , ".join(pred_keywords[0]),
                     )
 
-            # TODO REMOVE JUST FOR TESTING
-            if i == 10: break
+            # # TODO REMOVE
+            # if i == 50: break
 
         # Compute metrics
         if eval_type == "val":
@@ -284,15 +307,29 @@ class Trainer:
 
         results_title = self.evaluator.compute_title()
         results_keywords = self.evaluator.compute_keywords()
+
+        results = results_title | results_keywords
+
         if self.log_wandb:
-            if eval_type == "val":
-                wandb.log({"val/eval_table": self.eval_pred_table}, step=epoch)
-                wandb.log({"val/title_metrics": results_title}, step=epoch)
-                wandb.log({"val/keywords_metrics": results_keywords}, step=epoch)
-            else:
-                wandb.log({"test/eval_table": self.eval_pred_table}, step=1)
-                wandb.log({"test/title_metrics": results_title}, step=1)
-                wandb.log({"test/keywords_metrics": results_keywords}, step=1)
+
+            # wandb.log({f"{eval_type}/eval_table": self.eval_pred_table})
+
+            step = epoch if eval_type == "val" else 0
+
+            for metric_name in self.evaluator.get_metric_names:
+
+                wandb.log({f'{eval_type}/{metric_name}': results[metric_name], f'{eval_type}_{metric_name}_step': step})
+
+
+ #           if eval_type == "val":
+ #               wandb.log({"val/eval_table": self.eval_pred_table})
+#
+ #               wandb.log({"val/title_metrics": results_title, 'val_title_metrics_step': epoch})
+ #               wandb.log({"val/keywords_metrics": results_keywords, 'val_keywords_metrics_step': epoch})
+ #           else:
+ #               wandb.log({"test/eval_table": self.eval_pred_table})
+ #               wandb.log({"test/title_metrics": results_title, 'test_title_metrics_step': epoch})
+ #               wandb.log({"test/keywords_metrics": results_keywords, 'test_keywords_metrics_step': epoch})
 
         self.log_fn(" > Title Metrics: ")
         for metric_name, metric_value in results_title.items():
@@ -305,7 +342,7 @@ class Trainer:
         self.model.train()
 
     @torch.no_grad()
-    def _print_eval_train(self, batch, outputs, epoch, batch_id):
+    def _print_eval_train(self, batch, outputs, epoch):
         self.model.eval()
         if "logits" in outputs:
             # For seq2seq models like T5, the logits usually correspond to decoder outputs

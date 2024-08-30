@@ -27,6 +27,23 @@ class Evaluator:
     @property
     def get_metrics_keywords(self):
         return self.metrics_keywords
+    
+    @property
+    def get_metric_names(self):
+
+        names = []
+
+        for name in self.get_metrics_title:
+            
+            if name == 'rouge':
+                names.extend(['rouge1', 'rouge2', 'rougeL'])
+            else:
+                names.append(name)
+        
+        for name in self.get_metrics_keywords:
+            names.append(name)
+
+        return names
 
     def add_batch_title(self, predicted, target):
         for metric in self.metrics_title.values():
@@ -107,3 +124,7 @@ class Evaluator:
                 case _:
                     raise ValueError(f"Invalid metric name: {metric_name}")
         return result_log
+    
+    def compute(self):
+
+        return self.compute_title() |  self.compute_keywords()
