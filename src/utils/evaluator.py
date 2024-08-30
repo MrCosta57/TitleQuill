@@ -1,4 +1,4 @@
-from typing import List, Set
+from typing import List, Set, Tuple
 import evaluate
 from datamodule.dataset import OAGKXItem
 import re
@@ -73,17 +73,26 @@ class Evaluator:
 
     @staticmethod
     def split_title_keywords(responses: List[str]):
-        pattern = r"\s*\.?\s*\n?\s*Keywords:\s*"
-        parts = [re.split(pattern, r, maxsplit=1) for r in responses]
-        result = [
-            (
-                (p[0].strip(), set(split_keywords_by_comma(p[1])))
-                if len(p) == 2
-                else (r.strip(), set())
-            )
-            for p, r in zip(parts, responses)
-        ]
-        return result
+
+        def extract_title_keywords(text: str) -> Tuple[str, Set[str]]:
+            # Regular expression to match various cases
+            pattern = r"(?:Title:\s*(.*?))?\s*(?:Keywords:\s*(.*))?$"
+            
+            # Match the text with the pattern
+            match = re.match(pattern, text)
+
+            if match:
+                title = match.group(1).strip() if match.group(1) else ""
+                keywords = match.group(2).strip() if match.group(2) else ""
+                result = (title, keywords)
+            else:
+                result = (text.strip(), "")
+
+            t, k = result
+
+            return t, split_keywords_by_comma(k)
+
+        return [extract_title_keywords(response) for response in responses]
 
     def compute_title(self):
         result_log = {}

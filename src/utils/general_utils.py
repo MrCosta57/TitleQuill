@@ -36,4 +36,4 @@ def postprocess_validation_text(preds, labels):
 
 def split_keywords_by_comma(text: str):
     text = re.sub(r"^Keywords:\s*", "", text)
-    return re.split(r"\s*,\s*", text)
+    return set(re.split(r"\s*,\s*", text))

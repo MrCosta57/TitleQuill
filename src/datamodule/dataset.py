@@ -296,8 +296,8 @@ def custom_collate_seq2seq_2task(
     max_length: int,
     input_format1: str = "Generate title: {e}",
     input_format2: str = "Generate keywords: {e}",
-    output_format1: str = "Title: {t}",
-    output_format2: str = "Keywords: {k}",
+    output_format1: str = "{t}",
+    output_format2: str = "{k}",
 ):
 
     # batch is a list of dataset items

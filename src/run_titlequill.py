@@ -25,7 +25,12 @@ load_dotenv()
 # Load config
 # (collate_fn, loss_fn, double_task_flag)
 TRAINING_STRATEGIES = {
-    "combined_tasks": (custom_collate_seq2seq, hf_loss_fn, False),
+    
+    "combined_tasks": (
+        custom_collate_seq2seq,
+        hf_loss_fn,
+        False
+    ),
     "combined_tasks_shuffle": (
         partial(custom_collate_seq2seq, shuffle=True),
         hf_loss_fn,

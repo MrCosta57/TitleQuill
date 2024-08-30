@@ -80,10 +80,12 @@ class Trainer:
         self.evaluator = evaluator
 
     def train(self):
+
         # Logging function
         # self.log_fn = lambda x: None
+
         self.log_fn = print
-        """ loguru.logger.add(
+        """loguru.logger.add(
             f"logs/training-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log",
             level="INFO",
         )
@@ -114,11 +116,13 @@ class Trainer:
             self.train_pred_table = wandb.Table(
                 columns=["epoch", "prediction", "ground_truth"]
             )
+            
+            eval_cols = ["epoch", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"] + ([] if self.double_task else ['Pred_text'])
             self.val_pred_table = wandb.Table(
-                columns=["epoch", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"]
+                columns=eval_cols
             )
             self.test_pred_table = wandb.Table(
-                columns=["epoch", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"]
+                columns=eval_cols
             )
 
         # Set model to training mode
@@ -142,9 +146,10 @@ class Trainer:
                 # Add batch loss
                 loss_batches.append(loss.item())
                 # Log
+
                 # # TODO REMOVE 
-                # if batch_id % 5 == 0:
-                if batch_id % self.log_interval == 0:
+                if batch_id % 10 == 0:
+                #if batch_id % self.log_interval == 0:
                     if self.log_wandb:
                         wandb.log({"train/loss": loss.item(), 'train_loss_step': epoch * len(train_dataloader) + batch_id})
                     self.log_fn(
@@ -153,7 +158,7 @@ class Trainer:
                     self._print_eval_train(batch, outputs, epoch)
 
                 # # TODO REMOVE JUST FOR TESTING
-                # if batch_id == 20: break
+                if batch_id == 100: break
 
             if self.log_wandb:
                 wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches), 'train_epoch_loss_step': epoch})
@@ -162,7 +167,7 @@ class Trainer:
             self.validation(epoch=epoch)
 
             # # TODO REMOVE JUST FOR TESTING
-            # if epoch == 10: break
+            if epoch == 10: break
 
         if self.log_wandb:
             wandb.log({"train/train_pred_table": self.train_pred_table})
@@ -281,23 +286,29 @@ class Trainer:
             self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
             # # TODO Remove
-            # if i % 10 == 0:
-            if i % self.log_interval == 0:
+            if i % 10 == 0:
+            #if i % self.log_interval == 0:
                 self.log_fn(f"Batch {i} completed")
                 if self.log_wandb:
 
                     table = self.val_pred_table if eval_type == "val" else self.test_pred_table
 
-                    table.add_data(
+                    data = [
                         epoch,
-                        target_title[0],
+                        target_title[0], 
                         pred_title[0],
                         " , ".join(target_keywords[0]),
-                        " , ".join(pred_keywords[0]),
-                    )
+                        " , ".join(pred_keywords[0])
+                    ]
+
+                    if not self.double_task:
+                        data.append(decoded_preds[0])
+
+                    table.add_data(*data)
+
 
             # # TODO REMOVE
-            # if i == 50: break
+            if i == 50: break
 
         # Compute metrics
         if eval_type == "val":
