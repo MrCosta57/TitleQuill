@@ -114,10 +114,10 @@ class Trainer:
 
         if self.log_wandb:
             self.train_pred_table = wandb.Table(
-                columns=["epoch", "prediction", "ground_truth"]
+                columns=["epoch", "batch_id", "prediction", "ground_truth"]
             )
             
-            eval_cols = ["epoch", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"] + ([] if self.double_task else ['Pred_text'])
+            eval_cols = ["epoch", "batch_id", "GT_Title", "Pred_title", "GT_Keywords", "Pred_keywords"] + ([] if self.double_task else ['Pred_text'])
             self.val_pred_table = wandb.Table(
                 columns=eval_cols
             )
@@ -145,29 +145,21 @@ class Trainer:
                 self.optimizer.step()
                 # Add batch loss
                 loss_batches.append(loss.item())
+                
                 # Log
-
-                # # TODO REMOVE 
-                if batch_id % 10 == 0:
-                #if batch_id % self.log_interval == 0:
+                if batch_id % self.log_interval == 0:
                     if self.log_wandb:
                         wandb.log({"train/loss": loss.item(), 'train_loss_step': epoch * len(train_dataloader) + batch_id})
                     self.log_fn(
                         f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
-                    self._print_eval_train(batch, outputs, epoch)
-
-                # # TODO REMOVE JUST FOR TESTING
-                if batch_id == 100: break
+                    self._print_eval_train(batch, outputs, epoch, batch_id)
 
             if self.log_wandb:
                 wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches), 'train_epoch_loss_step': epoch})
 
             # Perform validation
             self.validation(epoch=epoch)
-
-            # # TODO REMOVE JUST FOR TESTING
-            if epoch == 10: break
 
         if self.log_wandb:
             wandb.log({"train/train_pred_table": self.train_pred_table})
@@ -285,9 +277,7 @@ class Trainer:
             self.evaluator.add_batch_title(predicted=pred_title, target=target_title)
             self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
-            # # TODO Remove
-            if i % 10 == 0:
-            #if i % self.log_interval == 0:
+            if i % self.log_interval == 0:
                 self.log_fn(f"Batch {i} completed")
                 if self.log_wandb:
 
@@ -295,6 +285,7 @@ class Trainer:
 
                     data = [
                         epoch,
+                        i,
                         target_title[0], 
                         pred_title[0],
                         " , ".join(target_keywords[0]),
@@ -305,10 +296,6 @@ class Trainer:
                         data.append(decoded_preds[0])
 
                     table.add_data(*data)
-
-
-            # # TODO REMOVE
-            if i == 50: break
 
         # Compute metrics
         if eval_type == "val":
@@ -353,7 +340,7 @@ class Trainer:
         self.model.train()
 
     @torch.no_grad()
-    def _print_eval_train(self, batch, outputs, epoch):
+    def _print_eval_train(self, batch, outputs, epoch, batch_id):
         self.model.eval()
         if "logits" in outputs:
             # For seq2seq models like T5, the logits usually correspond to decoder outputs
@@ -383,7 +370,7 @@ class Trainer:
                 for idx in log_idx:
                     if self.log_wandb:
                         self.train_pred_table.add_data(
-                            epoch, predicted_text[idx], ground_truth_text[idx]
+                            epoch, batch_id, predicted_text[idx], ground_truth_text[idx]
                         )
 
                     self.log_fn(f" > Example {idx} in the batch")
