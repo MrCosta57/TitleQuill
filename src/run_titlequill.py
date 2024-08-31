@@ -36,8 +36,13 @@ TRAINING_STRATEGIES = {
         hf_loss_fn,
         False,
     ),
-    "divided_tasks_ce_eisl": (
+    "divided_tasks": (
         partial(custom_collate_seq2seq_2task),
+        hf_loss_fn,
+        True,
+    ),
+    "divided_tasks_ce_eisl": (
+        custom_collate_seq2seq_2task,
         twotasks_ce_eisl_loss_fn,
         True,
     ),
@@ -72,11 +77,13 @@ def main(cfg):
     assert len(cfg.data.split_size) == 3
 
     collate_fn, loss_fn, double_task = TRAINING_STRATEGIES[cfg.model.strategy]
-    loss_fn = (
-        partial(loss_fn, lambda_=cfg.model.lambda_)
-        if cfg.model.strategy == "divided_tasks_ce_eisl"
-        else loss_fn
-    )
+
+    # loss_fn = (
+    #     partial(loss_fn, lambda_=cfg.model.lambda_)
+    #     if cfg.model.strategy == "divided_tasks_ce_eisl"
+    #     else loss_fn
+    # )
+
     device = torch.device(cfg.device)
 
     tokenizer = AutoTokenizer.from_pretrained(cfg.model.model_type)

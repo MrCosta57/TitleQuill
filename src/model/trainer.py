@@ -15,7 +15,6 @@ from utils.evaluator import Evaluator
 
 
 class Trainer:
-
     def __init__(
         self,
         model: PreTrainedModel,
@@ -147,6 +146,8 @@ class Trainer:
                 loss_batches.append(loss.item())
                 
                 # Log
+                # TODO REMOVE
+                #if batch_id % 2 == 0:
                 if batch_id % self.log_interval == 0:
                     if self.log_wandb:
                         wandb.log({"train/loss": loss.item(), 'train_loss_step': epoch * len(train_dataloader) + batch_id})
@@ -155,11 +156,17 @@ class Trainer:
                     )
                     self._print_eval_train(batch, outputs, epoch, batch_id)
 
+                # TODO REMOVE
+                # if batch_id == 10: break
+
             if self.log_wandb:
                 wandb.log({"train/epoch_loss": sum(loss_batches) / len(loss_batches), 'train_epoch_loss_step': epoch})
 
             # Perform validation
             self.validation(epoch=epoch)
+
+            # TODO REMOVE
+            # if epoch == 5: break
 
         if self.log_wandb:
             wandb.log({"train/train_pred_table": self.train_pred_table})
@@ -224,6 +231,7 @@ class Trainer:
 
 
         for i, batch in enumerate(dataloader):
+
             # Put batch on device
             batch = {k: v.to(self.device) for k, v in batch.items()}
             # Generate predicted tokens
@@ -278,6 +286,8 @@ class Trainer:
             self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
             if i % self.log_interval == 0:
+            # TODO REMOVE
+            # if i % 2 == 0:
                 self.log_fn(f"Batch {i} completed")
                 if self.log_wandb:
 
@@ -296,6 +306,9 @@ class Trainer:
                         data.append(decoded_preds[0])
 
                     table.add_data(*data)
+            
+            # TODO REMOVE
+            # if i == 10: break
 
         # Compute metrics
         if eval_type == "val":
@@ -317,17 +330,6 @@ class Trainer:
             for metric_name in self.evaluator.get_metric_names:
 
                 wandb.log({f'{eval_type}/{metric_name}': results[metric_name], f'{eval_type}_{metric_name}_step': step})
-
-
- #           if eval_type == "val":
- #               wandb.log({"val/eval_table": self.eval_pred_table})
-#
- #               wandb.log({"val/title_metrics": results_title, 'val_title_metrics_step': epoch})
- #               wandb.log({"val/keywords_metrics": results_keywords, 'val_keywords_metrics_step': epoch})
- #           else:
- #               wandb.log({"test/eval_table": self.eval_pred_table})
- #               wandb.log({"test/title_metrics": results_title, 'test_title_metrics_step': epoch})
- #               wandb.log({"test/keywords_metrics": results_keywords, 'test_keywords_metrics_step': epoch})
 
         self.log_fn(" > Title Metrics: ")
         for metric_name, metric_value in results_title.items():
@@ -365,7 +367,7 @@ class Trainer:
 
                 # Print the first example and the one in the middle
                 # NOTE: This is mostly for the two-task training
-                log_idx = [0, (len(predicted_text) + 1) // 2]
+                log_idx = [0, (len(predicted_text) + 1) // 2] if self.double_task else [0]
 
                 for idx in log_idx:
                     if self.log_wandb:

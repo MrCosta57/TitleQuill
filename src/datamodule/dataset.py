@@ -267,7 +267,7 @@ def custom_collate_seq2seq(
     def shuffle_keywords(keywords: str) -> str:
         SEP = " , "
         """Shuffle keywords in a string."""
-        keywords_list = split_keywords_by_comma(keywords)
+        keywords_list = list(split_keywords_by_comma(keywords))
         random.shuffle(keywords_list)
         return SEP.join(keywords_list)
 

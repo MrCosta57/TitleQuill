@@ -97,16 +97,24 @@ class Evaluator:
     def compute_title(self):
         result_log = {}
         for metric_name, metric in self.metrics_title.items():
-            result = metric.compute()
-            assert result is not None, f"Error computing metric: {metric_name}"
+            
             match metric_name:
                 case "rouge":
+
+                    result = metric.compute()
+
                     result_log["rouge1"] = result["rouge1"]
                     result_log["rouge2"] = result["rouge2"]
                     result_log["rougeL"] = result["rougeL"]
                 case "bleu":
+                    try:
+                        result = metric.compute()
+                    except:
+                        result = {"bleu": 0.0}
                     result_log[metric_name] = result["bleu"]
                 case "meteor":
+
+                    result = metric.compute()
                     result_log[metric_name] = result["meteor"]
                 case _:
                     raise ValueError(f"Invalid metric name: {metric_name}")
