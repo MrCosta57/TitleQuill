@@ -91,12 +91,14 @@ class Trainer:
         self.log_fn = loguru.logger.info """
 
         # Define step metrics
-        wandb.define_metric("train/loss", step_metric="train_loss_step")
-        wandb.define_metric("train/epoch_loss", step_metric="train_epoch_loss_step")
 
-        # Define a metric for each metric
-        for eval_type, metric_name in itertools.product(['val', 'test'], self.evaluator.get_metric_names):
-            wandb.define_metric(f'{eval_type}/{metric_name}', step_metric=f"{eval_type}_{metric_name}_step")
+        if self.log_wandb:
+            wandb.define_metric("train/loss", step_metric="train_loss_step")
+            wandb.define_metric("train/epoch_loss", step_metric="train_epoch_loss_step")
+
+            # Define a metric for each metric
+            for eval_type, metric_name in itertools.product(['val', 'test'], self.evaluator.get_metric_names):
+                wandb.define_metric(f'{eval_type}/{metric_name}', step_metric=f"{eval_type}_{metric_name}_step")
 
         # Initialize metrics
         train_dataloader = DataLoader(

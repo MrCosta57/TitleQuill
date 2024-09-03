@@ -37,7 +37,7 @@ TRAINING_STRATEGIES = {
         False,
     ),
     "divided_tasks": (
-        partial(custom_collate_seq2seq_2task),
+        custom_collate_seq2seq_2task,
         hf_loss_fn,
         True,
     ),
