@@ -115,7 +115,7 @@ def main(cfg):
     )
 
     trainer.train()
-    trainer.save(cfg.output_dir)
+    trainer.save(os.path.join(cfg.output_dir, f'{cfg.model.strategy}_{cfg.max_epochs}'))
     trainer.test()
 
 
