@@ -229,8 +229,8 @@ def load_oagkx_dataset(
 
 
 def apply_tokenization(
-    input_str: str,
-    label_str: str,
+    input_str: List[str],
+    label_str: List[str],
     tokenizer: PreTrainedTokenizerBase,
     max_length: int,
     tokenizer_input_args: Dict[str, Any] = {},
@@ -255,7 +255,12 @@ def apply_tokenization(
 
     # Add labels to model inputs
     model_inputs["labels"] = label_encodings["input_ids"]
-    return model_inputs
+
+    keys = ["input_ids", "attention_mask", "labels"]
+
+    return [
+        {k: model_inputs[k][i] for k in keys} for i, _ in enumerate(model_inputs["input_ids"])  # type: ignore
+    ]
 
 
 def custom_collate_seq2seq(
@@ -276,15 +281,24 @@ def custom_collate_seq2seq(
         return SEP.join(keywords_list)
 
     shuffle_fn = shuffle_keywords if shuffle else lambda x: x
-    new_row = [
-        apply_tokenization(
+
+    inp_gt = [
+        (
             input_format.format(e=item["abstract"]),
             output_format.format(t=item["title"], k=shuffle_fn(item["keywords"])),
-            tokenizer,
-            max_length,
         )
         for item in batch
     ]
+
+    inp, gt = zip(*inp_gt)
+
+    new_row = apply_tokenization(
+        list(inp),
+        list(gt),
+        tokenizer,
+        max_length,
+    )
+
     default_collator = DataCollatorForSeq2Seq(
         tokenizer,
         model=model,
@@ -305,25 +319,48 @@ def custom_collate_seq2seq_2task(
     output_format1: str = "{t}",
     output_format2: str = "{k}",
 ):
-
-    # batch is a list of dataset items
-    new_row = [
-        apply_tokenization(
-            input_format1.format(e=item["abstract"]),
+    
+    x_y_z_w = [
+        (
+            input_format1.format(e=item["abstract"]), 
             output_format1.format(t=item["title"]),
-            tokenizer,
-            max_length,
-        )
-        for item in batch
-    ] + [
-        apply_tokenization(
             input_format2.format(e=item["abstract"]),
             output_format2.format(k=item["keywords"]),
-            tokenizer,
-            max_length,
         )
         for item in batch
     ]
+
+    x, y, z, w = zip(*x_y_z_w)
+
+    inp = list(x + z)
+    gt  = list(y + w)
+
+    new_row = apply_tokenization(
+        inp,
+        gt,
+        tokenizer,
+        max_length,
+    )
+
+    # # batch is a list of dataset items
+    # new_row = [
+    #     apply_tokenization(
+    #         input_format1.format(e=item["abstract"]),
+    #         output_format1.format(t=item["title"]),
+    #         tokenizer,
+    #         max_length,
+    #     )
+    #     for item in batch
+    # ] + [
+    #     apply_tokenization(
+    #         input_format2.format(e=item["abstract"]),
+    #         output_format2.format(k=item["keywords"]),
+    #         tokenizer,
+    #         max_length,
+    #     )
+    #     for item in batch
+    # ]
+    
     default_collator = DataCollatorForSeq2Seq(
         tokenizer,
         model=model,
