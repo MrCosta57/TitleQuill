@@ -31,6 +31,7 @@ class Trainer:
         evaluator: Evaluator,
         log_wandb: bool = True,
         lr: float = 5e-4,
+        num_workers: int = 4,
         sep_special_tokens: str = "<sep>",
         train_batch_size: int = 64,
         val_batch_size: int = 128,
@@ -64,6 +65,7 @@ class Trainer:
         )
         self.val_batch_size = val_batch_size // 2 if double_task else val_batch_size
         self.shuffle = shuffle
+        self.num_workers = num_workers
 
         # Training loop
         self.max_epochs = max_epochs
@@ -75,7 +77,9 @@ class Trainer:
         self.loss_fn = loss_fn
 
         # Optimizer
-        self.optimizer = Adafactor(self.model.parameters(), lr=lr, relative_step=False)
+        self.optimizer = Adafactor(
+            self.model.parameters(), lr=lr, scale_parameter=False, relative_step=False
+        )
         self.evaluator = evaluator
 
     def train(self):
@@ -115,6 +119,7 @@ class Trainer:
                 max_length=self.max_length,
             ),
             shuffle=self.shuffle,
+            num_workers=self.num_workers,
         )
 
         if self.log_wandb:
@@ -205,6 +210,7 @@ class Trainer:
                 max_length=self.max_length,
             ),
             shuffle=False,
+            num_workers=self.num_workers
         )
         self._common_eval(val_dataloader, "val", epoch=epoch)
 
@@ -218,6 +224,7 @@ class Trainer:
                 max_length=self.max_length,
             ),
             shuffle=False,
+            num_workers=self.num_workers
         )
         self._common_eval(test_dataloader, "test")
         if self.log_wandb:

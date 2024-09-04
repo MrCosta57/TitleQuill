@@ -108,6 +108,7 @@ def main(cfg):
         max_new_tokens=cfg.model.max_new_tokens,
         lr=cfg.model.lr,
         evaluator=evaluator,
+        num_workers=cfg.model.num_workers,
         collate_fn=collate_fn,
         loss_fn=loss_fn,
         log_interval=cfg.log_interval,
