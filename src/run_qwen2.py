@@ -108,11 +108,11 @@ def main(cfg):
         evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
-            print_fn(f"Batch {i+1}")
+            print_fn(f"Batch {i+1}/{len(dataset)}")
+            print_fn(f"True title:\n{title}")
+            print_fn(f"True keywords:\n{keywords}")
             print_fn(f"Prediction:\n{response}")
-            print_fn(f"TRUE title:\n{title}")
-            print_fn(f"TRUE keywords:\n{keywords}")
-
+            
             if log_wandb and eval_table is not None:
                 eval_table.add_data(
                     title,
@@ -124,29 +124,22 @@ def main(cfg):
         break
 
     result_title = evaluator.compute_title()
-    print_fn("Title metrics:")
-    print_fn(result_title)
-
     result_keywords = evaluator.compute_keywords()
-    print_fn("Keywords metrics:")
-    print_fn(result_keywords)
+
+    print_fn("\nTitle metrics:")
+
+    for metric_name, result in result_title.items():
+        print(f">> {metric_name.upper()}: {result}")
+  
+    print_fn("\nKeywords metrics:")
+
+    for metric_name, result in result_keywords.items():
+        print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
-        wandb.log(
-            {
-                "test/eval_table": eval_table,
-            }
-        )
-        wandb.log(
-            {
-                "test/title": result_title,
-            }
-        )
-        wandb.log(
-            {
-                "test/keywords": result_keywords,
-            }
-        )
+        wandb.log({"test/eval_table": eval_table})
+        wandb.log({"test/title": result_title})
+        wandb.log({"test/keywords": result_keywords})
 
 
 if __name__ == "__main__":

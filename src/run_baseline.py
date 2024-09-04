@@ -101,35 +101,26 @@ def main(cfg):
     log_title_second = eval_second_baseline.compute_title()
     log_keywords = eval_keywords_baseline.compute_keywords()
 
+    print("\nTitle Metrics - Sentence with more keywords:")
+
     for metric_name, result in log_title_first.items():
-        print(
-            f"Title - Sentence with more keywords   > {metric_name.upper()}: {result}"
-        )
+        print(f">> {metric_name.upper()}: {result}")
+
+    print("\nTitle Metrics - First sentence of abstract:")
 
     for metric_name, result in log_title_second.items():
-        print(f"Title - First sentence of abstract   > {metric_name.upper()}: {result}")
+        print(f">> {metric_name.upper()}: {result}")
+
+    print("\nKeywords Metrics:")
 
     for metric_name, result in log_keywords.items():
-        print(f"Keywords - Most frequent words   > {metric_name.upper()}: {result}")
+        print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
         wandb.log({"test/eval_table": test_wandb_table})
-        for metric_name in cfg.metrics_title:
-            wandb.log(
-                {
-                    f"test/sent_more_keywords_{metric_name}": log_title_first[
-                        metric_name
-                    ],
-                    f"test/abstract_first_sentence_{metric_name}": log_title_second[
-                        metric_name
-                    ],
-                }
-            )
-
-        for metric_name in cfg.metrics_keywords:
-            wandb.log(
-                {f"test/most_freq_words_{metric_name}": log_keywords[metric_name]}
-            )
+        wandb.log({"test/title_first": log_title_first})
+        wandb.log({"test/title_second": log_title_second})
+        wandb.log({"test/keywords": log_keywords})
 
 
 if __name__ == "__main__":

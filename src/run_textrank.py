@@ -55,9 +55,9 @@ def main(cfg):
         eval_table = wandb.Table(
             columns=[
                 "GT_Title",
-                "Predicted Title",
+                "Pred_Title",
                 "GT_Keywords",
-                "Predicted Keywords",
+                "Pred_Keywords",
             ]
         )
     for i, data in enumerate(dataset):
@@ -79,11 +79,11 @@ def main(cfg):
         evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
-            print_fn(f"Batch {i+1}")
+            print_fn(f"Batch {i+1}/{len(dataset)}")
+            print_fn(f"True title:\n{title}")
             print_fn(f"Predicted title:\n{pred_title}")
-            print_fn(f"TRUE title:\n{title}")
+            print_fn(f"True keywords:\n{keywords}")
             print_fn(f"Predicted keywords:\n{pred_keywords}")
-            print_fn(f"TRUE keywords:\n{keywords}")
 
             if log_wandb and eval_table is not None:
                 eval_table.add_data(
@@ -96,12 +96,17 @@ def main(cfg):
         break
 
     result_log_title = evaluator.compute_title()
-    print_fn("Title metrics:")
-    print_fn(result_log_title)
-
     result_log_keywords = evaluator.compute_keywords()
-    print_fn("Keywords metrics:")
-    print_fn(result_log_keywords)
+
+    print_fn("\nTitle metrics:")
+
+    for metric_name, result in result_log_title:
+        print(f">> {metric_name.upper()}: {result}")
+    
+    print_fn("\nKeywords metrics:")
+    
+    for metric_name, result in result_log_title:
+        print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
         wandb.log({"test/eval_table": eval_table})
