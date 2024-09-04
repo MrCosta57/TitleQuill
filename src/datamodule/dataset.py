@@ -139,8 +139,8 @@ def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
         # print(abstract_tokens)
         return (
             250 <= abstract_words <= 540
-            and 10 <= title_length <= 20
-            and 4 <= keywords_count <= 5
+            and 10 <= title_length <= 25
+            and 3 <= keywords_count <= 5
         )
 
     return [
@@ -152,7 +152,7 @@ def filter_on_stats(batch: Dict[str, List[str]]) -> List[bool]:
 def load_oagkx_dataset(
     data_dir: str,
     split_size: Tuple[float, float, float] = (0.7, 0.15, 0.15),
-    just_one_file: bool = False,
+    first_n_files: int = -1,
     filter_fn: Callable[[Dict[str, List[str]]], List[bool]] | None = None,
     verbose: bool = True,
 ) -> DatasetDict:
@@ -179,18 +179,22 @@ def load_oagkx_dataset(
 
     print_fn = print if verbose else lambda x: None
 
-    filered_dir = os.path.join(
-        data_dir, f"filtered_{'one_file' if just_one_file else 'full'}"
+    filtered_dir = os.path.join(
+        data_dir,
+        f"filtered_{'first_'+str(first_n_files) if first_n_files!=-1 else 'full'}",
     )
 
-    if os.path.exists(filered_dir):
+    if os.path.exists(filtered_dir):
         print_fn("Loading filtered dataset ...")
-        dataset = load_from_disk(filered_dir)
+        dataset = load_from_disk(filtered_dir)
         print_fn(f"Dataset loaded with {len(dataset)} samples.")
     else:
         print_fn(f"Loading dataset from {data_dir} ...")
-        files = "part_0.jsonl" if just_one_file else "*.jsonl"
-        data_files = glob.glob(os.path.join(data_dir, files))
+        data_files = glob.glob(os.path.join(data_dir, "*.jsonl"))
+        data_files.sort()
+        if first_n_files != -1:
+            print_fn(f"Using just {first_n_files} files")
+            data_files = data_files[:first_n_files]
         dataset = load_dataset(
             "json", data_files=data_files, split="train", streaming=False
         )
@@ -199,8 +203,8 @@ def load_oagkx_dataset(
         if filter_fn is not None:
             print_fn("Applying filter function ...")
             dataset = dataset.filter(filter_fn, batched=True)
-            dataset.save_to_disk(filered_dir)
-            print_fn(f"Dataset saved to {filered_dir} with {len(dataset)} samples.")  # type: ignore
+            dataset.save_to_disk(filtered_dir)
+            print_fn(f"Dataset saved to {filtered_dir} with {len(dataset)} samples.")  # type: ignore
 
     # Apply split
     train_val, test = train_test_split(dataset=dataset, test_size=test_size)
@@ -243,6 +247,7 @@ def apply_tokenization(
         padding="max_length",
         max_length=max_length,
         truncation=True,
+        return_tensors="pt",
         **tokenizer_input_args,
     )
     label_encodings = tokenizer(
@@ -250,23 +255,19 @@ def apply_tokenization(
         padding="max_length",
         max_length=max_length,
         truncation=True,
+        return_tensors="pt",
         **tokenizer_label_args,
     )
-
+    labels = label_encodings["input_ids"]
+    labels[labels == tokenizer.pad_token_id] = -100  # type: ignore
     # Add labels to model inputs
-    model_inputs["labels"] = label_encodings["input_ids"]
-
-    keys = ["input_ids", "attention_mask", "labels"]
-
-    return [
-        {k: model_inputs[k][i] for k in keys} for i, _ in enumerate(model_inputs["input_ids"])  # type: ignore
-    ]
+    model_inputs["labels"] = labels
+    return model_inputs
 
 
 def custom_collate_seq2seq(
     batch,
     tokenizer,
-    model,
     max_length: int,
     input_format: str = "Generate title and keywords: {e}",
     output_format: str = "Title: {t}<sep>Keywords: {k}",
@@ -276,7 +277,7 @@ def custom_collate_seq2seq(
     def shuffle_keywords(keywords: str) -> str:
         SEP = " , "
         """Shuffle keywords in a string."""
-        keywords_list = list(split_keywords_by_comma(keywords))
+        keywords_list = split_keywords_by_comma(keywords)
         random.shuffle(keywords_list)
         return SEP.join(keywords_list)
 
@@ -290,50 +291,8 @@ def custom_collate_seq2seq(
         for item in batch
     ]
 
+    # Return 2 tuples (like lists)
     inp, gt = zip(*inp_gt)
-
-    new_row = apply_tokenization(
-        list(inp),
-        list(gt),
-        tokenizer,
-        max_length,
-    )
-
-    default_collator = DataCollatorForSeq2Seq(
-        tokenizer,
-        model=model,
-        max_length=max_length,
-        padding="max_length",
-        return_tensors="pt",
-    )
-    return default_collator(new_row)
-
-
-def custom_collate_seq2seq_2task(
-    batch,
-    tokenizer,
-    model,
-    max_length: int,
-    input_format1: str = "Generate title: {e}",
-    input_format2: str = "Generate keywords: {e}",
-    output_format1: str = "{t}",
-    output_format2: str = "{k}",
-):
-    
-    x_y_z_w = [
-        (
-            input_format1.format(e=item["abstract"]), 
-            output_format1.format(t=item["title"]),
-            input_format2.format(e=item["abstract"]),
-            output_format2.format(k=item["keywords"]),
-        )
-        for item in batch
-    ]
-
-    x, y, z, w = zip(*x_y_z_w)
-
-    inp = list(x + z)
-    gt  = list(y + w)
 
     new_row = apply_tokenization(
         inp,
@@ -342,30 +301,39 @@ def custom_collate_seq2seq_2task(
         max_length,
     )
 
-    # # batch is a list of dataset items
-    # new_row = [
-    #     apply_tokenization(
-    #         input_format1.format(e=item["abstract"]),
-    #         output_format1.format(t=item["title"]),
-    #         tokenizer,
-    #         max_length,
-    #     )
-    #     for item in batch
-    # ] + [
-    #     apply_tokenization(
-    #         input_format2.format(e=item["abstract"]),
-    #         output_format2.format(k=item["keywords"]),
-    #         tokenizer,
-    #         max_length,
-    #     )
-    #     for item in batch
-    # ]
-    
-    default_collator = DataCollatorForSeq2Seq(
+    return new_row
+
+
+def custom_collate_seq2seq_2task(
+    batch,
+    tokenizer,
+    max_length: int,
+    input_format1: str = "Generate title: {e}",
+    input_format2: str = "Generate keywords: {e}",
+    output_format1: str = "{t}",
+    output_format2: str = "{k}",
+):
+    x_y_z_w = [
+        (
+            input_format1.format(e=item["abstract"]),
+            output_format1.format(t=item["title"]),
+            input_format2.format(e=item["abstract"]),
+            output_format2.format(k=item["keywords"]),
+        )
+        for item in batch
+    ]
+
+    # Return 4 tuples (like lists)
+    x, y, z, w = zip(*x_y_z_w)
+
+    inp = x + z
+    gt = y + w
+
+    new_row = apply_tokenization(
+        inp,
+        gt,
         tokenizer,
-        model=model,
-        max_length=max_length,
-        padding="max_length",
-        return_tensors="pt",
+        max_length,
     )
-    return default_collator(new_row)
+
+    return new_row

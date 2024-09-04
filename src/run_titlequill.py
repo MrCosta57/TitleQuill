@@ -25,12 +25,7 @@ load_dotenv()
 # Load config
 # (collate_fn, loss_fn, double_task_flag)
 TRAINING_STRATEGIES = {
-    
-    "combined_tasks": (
-        custom_collate_seq2seq,
-        hf_loss_fn,
-        False
-    ),
+    "combined_tasks": (custom_collate_seq2seq, hf_loss_fn, False),
     "combined_tasks_shuffle": (
         partial(custom_collate_seq2seq, shuffle=True),
         hf_loss_fn,
@@ -60,12 +55,15 @@ def main(cfg):
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
     log_wandb: bool = cfg.get("logger") is not None
+    assert cfg.model.strategy in TRAINING_STRATEGIES
+    assert len(cfg.data.split_size) == 3
+
     if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
         wandb.init(
             project=cfg.logger.project,
-            tags=[cfg.model.model_name],
+            tags=[cfg.model.model_name, cfg.model.strategy],
             dir=cfg.logger.log_dir,
             config={
                 k: v
@@ -73,8 +71,6 @@ def main(cfg):
                 if k != "model_name" and k != "model_type"
             },
         )
-    assert cfg.model.strategy in TRAINING_STRATEGIES
-    assert len(cfg.data.split_size) == 3
 
     collate_fn, loss_fn, double_task = TRAINING_STRATEGIES[cfg.model.strategy]
 
@@ -91,7 +87,7 @@ def main(cfg):
     dataset_dict = load_oagkx_dataset(
         data_dir=cfg.data.data_dir,
         split_size=tuple(cfg.data.split_size),
-        just_one_file=cfg.data.just_one_file,
+        first_n_files=cfg.data.first_n_files,
         filter_fn=filter_on_stats,
     )
     evaluator = Evaluator(

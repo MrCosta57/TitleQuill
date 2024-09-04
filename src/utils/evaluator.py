@@ -88,8 +88,9 @@ class Evaluator:
                 result = (text.strip(), "")
 
             t, k = result
+            k = set(split_keywords_by_comma(k))
 
-            return t, split_keywords_by_comma(k)
+            return t, k
 
         return [extract_title_keywords(response) for response in responses]
 
@@ -144,5 +145,4 @@ class Evaluator:
         return result_log
 
     def compute(self):
-
         return self.compute_title() | self.compute_keywords()

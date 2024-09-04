@@ -36,7 +36,7 @@ def main(cfg):
     dataset_dict = load_oagkx_dataset(
         data_dir=cfg.data.data_dir,
         split_size=tuple(cfg.data.split_size),
-        just_one_file=cfg.data.just_one_file,
+        first_n_files=cfg.data.first_n_files,
         filter_fn=filter_on_stats,
     )
     dataset = dataset_dict["test"]
