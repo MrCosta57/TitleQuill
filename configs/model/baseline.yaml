@@ -1,3 +1,4 @@
 model_name: "Baseline"
 metrics_title: ["rouge1", "rouge2", "rougeL", "bleu", "meteor"]
 metrics_keywords: ["f1", "precision", "recall"]
+title_strategy: 'with_more_kw' # one of 'first_sentence', 'with_more_kw'

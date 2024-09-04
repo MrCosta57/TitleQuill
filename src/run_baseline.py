@@ -12,8 +12,14 @@ import wandb
 def main(cfg):
     setup_nltk()
     seed_everything(cfg.seed)
+
     cfg = OmegaConf.to_container(cfg, resolve=True)
+    cfg['model'] = OmegaConf.load("configs/model/baseline.yaml")
+
     assert cfg is not None
+    print(cfg)
+    assert cfg['model']['title_strategy'] in ['first_sentence', 'with_more_kw']
+    
     if cfg.get("model") == None:
         conf = OmegaConf.load("configs/model/baseline.yaml")
         cfg["model"] = conf  # type: ignore
@@ -40,34 +46,45 @@ def main(cfg):
         filter_fn=filter_on_stats,
     )
     dataset = dataset_dict["test"]
-    eval_first_baseline = Evaluator(
+
+    evaluator = Evaluator(
         metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
     )
-    eval_second_baseline = Evaluator(
-        metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
-    )
-    eval_keywords_baseline = Evaluator(
-        metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
-    )
+
+    # Define a metric for each metric
+    for metric_name in evaluator.get_metric_names:
+        wandb.define_metric(
+            f"test/{metric_name}",
+            step_metric=f"test_{metric_name}_step",
+        )
+
     test_wandb_table = None
+
     if log_wandb:
+
+        # Add metrics
+
         test_wandb_table = wandb.Table(
             columns=[
                 "GT_Title",
-                "Sentence with more keywords",
-                "First sentence of abstract",
+                "Pred_title",
                 "GT_Keywords",
-                "Most frequent words",
+                "Pred_keywords",
             ]
         )
+    
     for i, data in enumerate(dataset):
+
         item = OAGKXItem.from_json(data)  # type: ignore
 
         true_title = item.title
         true_keywords = item.keywords
 
-        first_baseline_title, _ = item.sentence_with_more_keywords
-        second_baseline_title = item.abstract_first_sentence
+        if cfg['model']['title_strategy'] == 'first_sentence':
+            baseline_title, _ = item.sentence_with_more_keywords
+        elif cfg['model']['title_strategy'] == 'with_more_kw':
+            baseline_title = item.abstract_first_sentence
+        
         baseline_keywords = set(item.get_most_frequent_words().keys())
 
         # Convert lists to binary format
@@ -75,40 +92,33 @@ def main(cfg):
             [true_keywords], [baseline_keywords]
         )
         pred_binary, ref_binary = zip(*bin_keywords_list)
-        eval_first_baseline.add_batch_title([first_baseline_title], [true_title])
-        eval_second_baseline.add_batch_title([second_baseline_title], [true_title])
-        eval_keywords_baseline.add_batch_keywords(pred_binary, ref_binary)
+
+        evaluator.add_batch_title([baseline_title], [true_title])
+        evaluator.add_batch_keywords(pred_binary, ref_binary)
 
         if i % cfg.log_interval == 0:
+
             print(f"Batch {i+1}/{len(dataset)}")
             print(f"True Title: {true_title}")
-            print(f"Sentence with more keywords: {first_baseline_title}")
-            print(f"First sentence of abstract: {second_baseline_title}")
+            print(f"Predicted title: {baseline_title}")
             print(f"True Keywords: {true_keywords}")
             print(f"Most frequent words: {baseline_keywords}")
 
             if log_wandb and test_wandb_table is not None:
                 test_wandb_table.add_data(
                     true_title,
-                    first_baseline_title,
-                    second_baseline_title,
+                    baseline_title,
                     " , ".join(true_keywords),
                     " , ".join(baseline_keywords),
                 )
             break
 
-    log_title_first = eval_first_baseline.compute_title()
-    log_title_second = eval_second_baseline.compute_title()
-    log_keywords = eval_keywords_baseline.compute_keywords()
+    log_title    = evaluator.compute_title()
+    log_keywords = evaluator.compute_keywords()
 
-    print("\nTitle Metrics - Sentence with more keywords:")
+    print("\nTitle Metrics")
 
-    for metric_name, result in log_title_first.items():
-        print(f">> {metric_name.upper()}: {result}")
-
-    print("\nTitle Metrics - First sentence of abstract:")
-
-    for metric_name, result in log_title_second.items():
+    for metric_name, result in log_title.items():
         print(f">> {metric_name.upper()}: {result}")
 
     print("\nKeywords Metrics:")
@@ -117,11 +127,16 @@ def main(cfg):
         print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
-        wandb.log({"test/eval_table": test_wandb_table})
-        wandb.log({"test/title_first": log_title_first})
-        wandb.log({"test/title_second": log_title_second})
-        wandb.log({"test/keywords": log_keywords})
 
+        logs = log_title | log_keywords
+
+        for metric_name in evaluator.get_metric_names:
+            wandb.log(
+                {
+                    f"test/{metric_name}": logs[metric_name],
+                    f"test_{metric_name}_step": 0,
+                }
+            )
 
 if __name__ == "__main__":
     main()
