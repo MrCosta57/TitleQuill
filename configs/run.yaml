@@ -6,7 +6,7 @@ defaults:
   - logger: wandb
   - model: null
 
-device: "cuda:0"
+device: "cuda"
 log_interval: 100
 metrics_title: ["rouge", "bleu", "meteor"]
 metrics_keywords: ["f1", "precision", "recall"]

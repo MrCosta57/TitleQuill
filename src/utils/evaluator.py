@@ -1,6 +1,5 @@
 from typing import List, Set, Tuple
 import evaluate
-from datamodule.dataset import OAGKXItem
 import re
 from utils.general_utils import split_keywords_by_comma
 
@@ -27,19 +26,19 @@ class Evaluator:
     @property
     def get_metrics_keywords(self):
         return self.metrics_keywords
-    
+
     @property
     def get_metric_names(self):
 
         names = []
 
         for name in self.get_metrics_title:
-            
-            if name == 'rouge':
-                names.extend(['rouge1', 'rouge2', 'rougeL'])
+
+            if name == "rouge":
+                names.extend(["rouge1", "rouge2", "rougeL"])
             else:
                 names.append(name)
-        
+
         for name in self.get_metrics_keywords:
             names.append(name)
 
@@ -77,7 +76,7 @@ class Evaluator:
         def extract_title_keywords(text: str) -> Tuple[str, Set[str]]:
             # Regular expression to match various cases
             pattern = r"(?:Title:\s*(.*?))?\s*(?:Keywords:\s*(.*))?$"
-            
+
             # Match the text with the pattern
             match = re.match(pattern, text)
 
@@ -97,11 +96,12 @@ class Evaluator:
     def compute_title(self):
         result_log = {}
         for metric_name, metric in self.metrics_title.items():
-            
+
             match metric_name:
                 case "rouge":
 
                     result = metric.compute()
+                    assert result is not None, "Error computing metric: rouge"
 
                     result_log["rouge1"] = result["rouge1"]
                     result_log["rouge2"] = result["rouge2"]
@@ -111,10 +111,11 @@ class Evaluator:
                         result = metric.compute()
                     except:
                         result = {"bleu": 0.0}
+                    assert result is not None, "Error computing metric: bleu"
                     result_log[metric_name] = result["bleu"]
                 case "meteor":
-
                     result = metric.compute()
+                    assert result is not None, "Error computing metric: meteor"
                     result_log[metric_name] = result["meteor"]
                 case _:
                     raise ValueError(f"Invalid metric name: {metric_name}")
@@ -141,7 +142,7 @@ class Evaluator:
                 case _:
                     raise ValueError(f"Invalid metric name: {metric_name}")
         return result_log
-    
+
     def compute(self):
 
-        return self.compute_title() |  self.compute_keywords()
+        return self.compute_title() | self.compute_keywords()

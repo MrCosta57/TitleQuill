@@ -154,7 +154,8 @@ class Trainer:
                     self.log_fn(
                         f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
-                    self._print_eval_train(batch, outputs, epoch, batch_id)
+                    if batch_id % (self.log_interval*5) == 0:
+                        self._print_eval_train(batch, outputs, epoch, batch_id)
 
                 # TODO REMOVE
                 # if batch_id == 10: break

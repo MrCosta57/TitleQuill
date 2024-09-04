@@ -3,9 +3,9 @@ model_type: "google/flan-t5-small"
 
 strategy: "divided_tasks" # One of "combined_tasks", "combined_tasks_shuffle", "divided_tasks_ce_eisl", "divided_tasks"
 lambda_: 1.0 # Used only in "divided_tasks_ce_eisl" strategy
-train_batch_size: 4 #64
-val_batch_size: 4 #128
-max_epochs: 30
+train_batch_size: 16
+val_batch_size: 32
+max_epochs: 15
 max_length: 512
 max_new_tokens: 150
 lr: 5e-4

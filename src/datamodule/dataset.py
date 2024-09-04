@@ -179,7 +179,9 @@ def load_oagkx_dataset(
 
     print_fn = print if verbose else lambda x: None
 
-    filered_dir = os.path.join(data_dir, f"filtered_{'one_file' if just_one_file else 'full'}")
+    filered_dir = os.path.join(
+        data_dir, f"filtered_{'one_file' if just_one_file else 'full'}"
+    )
 
     if os.path.exists(filered_dir):
         print_fn("Loading filtered dataset ...")
@@ -195,8 +197,10 @@ def load_oagkx_dataset(
         print_fn(f"Dataset loaded with {len(dataset)} samples.")  # type: ignore
         # Apply filter function
         if filter_fn is not None:
+            print_fn("Applying filter function ...")
             dataset = dataset.filter(filter_fn, batched=True)
             dataset.save_to_disk(filered_dir)
+            print_fn(f"Dataset saved to {filered_dir} with {len(dataset)} samples.")  # type: ignore
 
     # Apply split
     train_val, test = train_test_split(dataset=dataset, test_size=test_size)
