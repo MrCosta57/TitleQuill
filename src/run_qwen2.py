@@ -20,6 +20,7 @@ def main(cfg):
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
     log_wandb: bool = cfg.get("logger") is not None
+
     if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
@@ -58,7 +59,16 @@ def main(cfg):
     print_fn(f" - Device:      {device}")
 
     eval_table = None
+
     if log_wandb:
+
+        # Add metrics
+        for metric_name in evaluator.get_metric_names:
+            wandb.define_metric(
+                f"test/{metric_name}",
+                step_metric=f"test_{metric_name}_step",
+            )
+        
         eval_table = wandb.Table(
             columns=[
                 "GT_Title",
@@ -108,6 +118,7 @@ def main(cfg):
         evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
+
             print_fn(f"Batch {i+1}/{len(dataset)}")
             print_fn(f"True title:\n{title}")
             print_fn(f"True keywords:\n{keywords}")
@@ -121,7 +132,7 @@ def main(cfg):
                     " , ".join(pred_keywords),
                 )
 
-        break
+            # if i > 0: break
 
     result_title = evaluator.compute_title()
     result_keywords = evaluator.compute_keywords()
@@ -130,16 +141,39 @@ def main(cfg):
 
     for metric_name, result in result_title.items():
         print(f">> {metric_name.upper()}: {result}")
-  
+
     print_fn("\nKeywords metrics:")
 
     for metric_name, result in result_keywords.items():
         print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
+
+        logs = result_title | result_keywords
+
         wandb.log({"test/eval_table": eval_table})
-        wandb.log({"test/title": result_title})
-        wandb.log({"test/keywords": result_keywords})
+
+        for metric_name in evaluator.get_metric_names:
+            wandb.log(
+                {
+                    f"test/{metric_name}": logs[metric_name],
+                    f"test_{metric_name}_step": 0,
+                }
+            )
+    
+    if log_wandb:
+
+        logs = result_title | result_keywords
+
+        wandb.log({"test/eval_table": eval_table})
+
+        for metric_name in evaluator.get_metric_names:
+            wandb.log(
+                {
+                    f"test/{metric_name}": logs[metric_name],
+                    f"test_{metric_name}_step": 0,
+                }
+            )
 
 
 if __name__ == "__main__":

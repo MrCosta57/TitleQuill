@@ -52,6 +52,7 @@ def main(cfg):
     print_fn(f" - Num Batches: {len(dataset)}")
     eval_table = None
     if log_wandb:
+
         eval_table = wandb.Table(
             columns=[
                 "GT_Title",
@@ -60,6 +61,13 @@ def main(cfg):
                 "Pred_Keywords",
             ]
         )
+
+        for metric_name in evaluator.get_metric_names:
+            wandb.define_metric(
+                f"test/{metric_name}",
+                step_metric=f"test_{metric_name}_step",
+            )
+    
     for i, data in enumerate(dataset):
 
         item = OAGKXItem.from_json(data)  # type: ignore
@@ -93,25 +101,34 @@ def main(cfg):
                     " , ".join(pred_keywords),
                 )
 
-        break
+            # if i > 0: break
 
     result_log_title = evaluator.compute_title()
     result_log_keywords = evaluator.compute_keywords()
 
     print_fn("\nTitle metrics:")
 
-    for metric_name, result in result_log_title:
+    for metric_name, result in result_log_title.items():
         print(f">> {metric_name.upper()}: {result}")
     
     print_fn("\nKeywords metrics:")
     
-    for metric_name, result in result_log_title:
+    for metric_name, result in result_log_title.items():
         print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
+
+        logs = result_log_title | result_log_keywords
+
         wandb.log({"test/eval_table": eval_table})
-        wandb.log({"test/title": result_log_title})
-        wandb.log({"test/keywords": result_log_keywords})
+
+        for metric_name in evaluator.get_metric_names:
+            wandb.log(
+                {
+                    f"test/{metric_name}": logs[metric_name],
+                    f"test_{metric_name}_step": 0,
+                }
+            )
 
 
 if __name__ == "__main__":

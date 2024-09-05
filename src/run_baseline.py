@@ -51,18 +51,14 @@ def main(cfg):
         metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
     )
 
-    # Define a metric for each metric
-    for metric_name in evaluator.get_metric_names:
-        wandb.define_metric(
-            f"test/{metric_name}",
-            step_metric=f"test_{metric_name}_step",
-        )
-
-    test_wandb_table = None
-
     if log_wandb:
 
         # Add metrics
+        for metric_name in evaluator.get_metric_names:
+            wandb.define_metric(
+                f"test/{metric_name}",
+                step_metric=f"test_{metric_name}_step",
+            )
 
         test_wandb_table = wandb.Table(
             columns=[
@@ -72,6 +68,10 @@ def main(cfg):
                 "Pred_keywords",
             ]
         )
+
+    else: 
+        test_wandb_table = None
+
     
     for i, data in enumerate(dataset):
 
@@ -111,7 +111,9 @@ def main(cfg):
                     " , ".join(true_keywords),
                     " , ".join(baseline_keywords),
                 )
-            break
+
+            # if i > 0: break
+            
 
     log_title    = evaluator.compute_title()
     log_keywords = evaluator.compute_keywords()
@@ -129,6 +131,8 @@ def main(cfg):
     if log_wandb:
 
         logs = log_title | log_keywords
+
+        wandb.log({"test/eval_table": test_wandb_table})
 
         for metric_name in evaluator.get_metric_names:
             wandb.log(
