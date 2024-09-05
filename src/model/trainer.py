@@ -210,7 +210,7 @@ class Trainer:
                 max_length=self.max_length,
             ),
             shuffle=False,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
         )
         self._common_eval(val_dataloader, "val", epoch=epoch)
 
@@ -224,7 +224,7 @@ class Trainer:
                 max_length=self.max_length,
             ),
             shuffle=False,
-            num_workers=self.num_workers
+            num_workers=self.num_workers,
         )
         self._common_eval(test_dataloader, "test")
         if self.log_wandb:
@@ -452,3 +452,10 @@ class Trainer:
             raise ValueError(
                 f"Model or tokenizer path does not exist at {load_directory}"
             )
+        # Load model
+        self.model = self.model.from_pretrained(model_load_path)
+        print(f"Model loaded from {model_load_path}")
+        # Load tokenizer
+        self.tokenizer = self.tokenizer.from_pretrained(tokenizer_load_path)
+        print(f"Tokenizer loaded from {tokenizer_load_path}")
+        self.model.to(self.device)  # type: ignore
