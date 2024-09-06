@@ -132,7 +132,6 @@ def main(cfg):
                     " , ".join(pred_keywords[0]),
                 )
 
-        break
 
     result_title = evaluator.compute_title()
     result_keywords = evaluator.compute_keywords()

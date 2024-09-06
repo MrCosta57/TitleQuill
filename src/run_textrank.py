@@ -100,9 +100,6 @@ def main(cfg):
                     " , ".join(pred_keywords),
                 )
 
-        break
-        # if i > 0: break
-
     result_log_title = evaluator.compute_title()
     result_log_keywords = evaluator.compute_keywords()
 
