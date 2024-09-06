@@ -80,9 +80,9 @@ def main(cfg):
         true_title = item.title
         true_keywords = item.keywords
 
-        if cfg['model']['title_strategy'] == 'first_sentence':
+        if cfg['model']['title_strategy'] == 'with_more_kw':
             baseline_title, _ = item.sentence_with_more_keywords
-        elif cfg['model']['title_strategy'] == 'with_more_kw':
+        elif cfg['model']['title_strategy'] == 'first_sentence':
             baseline_title = item.abstract_first_sentence
         
         baseline_keywords = set(item.get_most_frequent_words().keys())
