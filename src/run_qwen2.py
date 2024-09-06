@@ -47,7 +47,7 @@ def main(cfg):
     dataset = dataset_dict["test"]
     # Encode input prompt
     template_prompt = "Generate the title and the keywords from the below abstract. Do not add any other information and separate the keywords by the comma character.\
-        Output must be in the format:\nTitle: [title]\nKeywords: [keywords]\n\
+        Output must be in the format:\nTitle: [title]. Keywords: [keywords]\n\
         The abstract is:"
     print_fn = print
 
@@ -73,67 +73,69 @@ def main(cfg):
                 "Pred_Title",
                 "GT_Keywords",
                 "Pred_Keywords",
-                "Pred_text"
+                "Pred_text",
             ]
         )
 
     model = model.to(device)
     model.eval()
-    for i, data in enumerate(dataset):
-        item = OAGKXItem.from_json(data)  # type: ignore
-        abstract = item.abstract
-        title = "Title: " + item.title
-        keywords = item.keywords
+    with torch.no_grad():
+        for i, data in enumerate(dataset):
+            item = OAGKXItem.from_json(data)  # type: ignore
+            abstract = item.abstract
+            title = item.title
+            keywords = item.keywords
 
-        prompt = template_prompt + abstract
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ]
-        text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        model_inputs = tokenizer([text], return_tensors="pt").to(device)  # type: ignore
-        generated_ids = model.generate(
-            model_inputs.input_ids, max_new_tokens=cfg.model.max_new_tokens
-        )
-        generated_ids = [
-            output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        response = tokenizer.batch_decode(
-            generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
+            prompt = template_prompt + abstract
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ]
+            text = tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            model_inputs = tokenizer([text], return_tensors="pt").to(device)  # type: ignore
+            generated_ids = model.generate(
+                model_inputs.input_ids, max_new_tokens=cfg.model.max_new_tokens
+            )
+            generated_ids = [
+                output_ids[len(input_ids) :]
+                for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            ]
+            response = tokenizer.batch_decode(
+                generated_ids,
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
+            )
 
-        pred_split = Evaluator.split_title_keywords(response)
-        pred_title, pred_keywords = zip(*pred_split)
+            pred_split = Evaluator.split_title_keywords(response)
+            pred_title, pred_keywords = zip(*pred_split)
 
-        pred_title, title = postprocess_validation_text(pred_title, [title])
+            pred_title, title = postprocess_validation_text(pred_title, [title])
 
-        bin_keywords_list = Evaluator.binary_labels_keywords(
-            target_keywords=[keywords], pred_keywords=pred_keywords
-        )
-        pred_binary, ref_binary = zip(*bin_keywords_list)
+            bin_keywords_list = Evaluator.binary_labels_keywords(
+                target_keywords=[keywords], pred_keywords=pred_keywords
+            )
+            pred_binary, ref_binary = zip(*bin_keywords_list)
 
-        evaluator.add_batch_title(predicted=pred_title, target=title)
-        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
+            evaluator.add_batch_title(predicted=pred_title, target=title)
+            evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
-        if i % cfg.log_interval == 0:
+            if i % cfg.log_interval == 0:
 
-            print_fn(f"Batch {i+1}/{len(dataset)}")
-            print_fn(f"True title:\n{title[0]}")
-            print_fn(f"True keywords:\n{keywords}")
-            print_fn(f"Prediction:\n{response[0]}")
+                print_fn(f"Batch {i+1}/{len(dataset)}")
+                print_fn(f"True title:\n{title[0]}")
+                print_fn(f"True keywords:\n{keywords}")
+                print_fn(f"Prediction:\n{response[0]}")
 
-            if log_wandb and eval_table is not None:
-                eval_table.add_data(
-                    item.title,
-                    pred_title[0],
-                    " , ".join(keywords),
-                    " , ".join(pred_keywords[0]),
-                    response[0]
-                )
-
+                if log_wandb and eval_table is not None:
+                    eval_table.add_data(
+                        title[0],
+                        pred_title[0],
+                        " , ".join(keywords),
+                        " , ".join(pred_keywords[0]),
+                        response[0],
+                    )
 
     result_title = evaluator.compute_title()
     result_keywords = evaluator.compute_keywords()
