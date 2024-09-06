@@ -7,7 +7,7 @@ import wandb
 from datamodule.dataset import OAGKXItem, filter_on_stats, load_oagkx_dataset
 from model.text_rank import get_title_and_keywords
 from utils.evaluator import Evaluator
-from utils.general_utils import seed_everything, setup_nltk
+from utils.general_utils import postprocess_validation_text, seed_everything, setup_nltk
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
@@ -52,7 +52,11 @@ def main(cfg):
     print_fn(f" - Num Batches: {len(dataset)}")
     eval_table = None
     if log_wandb:
-
+        for metric_name in evaluator.get_metric_names:
+            wandb.define_metric(
+                f"test/{metric_name}",
+                step_metric=f"test_{metric_name}_step",
+            )
         eval_table = wandb.Table(
             columns=[
                 "GT_Title",
@@ -62,12 +66,6 @@ def main(cfg):
             ]
         )
 
-        for metric_name in evaluator.get_metric_names:
-            wandb.define_metric(
-                f"test/{metric_name}",
-                step_metric=f"test_{metric_name}_step",
-            )
-    
     for i, data in enumerate(dataset):
 
         item = OAGKXItem.from_json(data)  # type: ignore
@@ -76,8 +74,9 @@ def main(cfg):
         keywords = item.keywords
 
         pred_title, pred_keywords = get_title_and_keywords(abstract)
+        pred_title, title = postprocess_validation_text([pred_title], [title])
 
-        evaluator.add_batch_title(predicted=[pred_title], target=[title])
+        evaluator.add_batch_title(predicted=pred_title, target=title)
 
         bin_keywords_list = Evaluator.binary_labels_keywords(
             [keywords], [pred_keywords]
@@ -88,20 +87,21 @@ def main(cfg):
 
         if i % cfg.log_interval == 0:
             print_fn(f"Batch {i+1}/{len(dataset)}")
-            print_fn(f"True title:\n{title}")
-            print_fn(f"Predicted title:\n{pred_title}")
+            print_fn(f"True title:\n{title[0]}")
+            print_fn(f"Predicted title:\n{pred_title[0]}")
             print_fn(f"True keywords:\n{keywords}")
             print_fn(f"Predicted keywords:\n{pred_keywords}")
 
             if log_wandb and eval_table is not None:
                 eval_table.add_data(
-                    title,
-                    pred_title,
+                    title[0],
+                    pred_title[0],
                     " , ".join(keywords),
                     " , ".join(pred_keywords),
                 )
 
-            # if i > 0: break
+        break
+        # if i > 0: break
 
     result_log_title = evaluator.compute_title()
     result_log_keywords = evaluator.compute_keywords()
@@ -110,18 +110,15 @@ def main(cfg):
 
     for metric_name, result in result_log_title.items():
         print(f">> {metric_name.upper()}: {result}")
-    
+
     print_fn("\nKeywords metrics:")
-    
+
     for metric_name, result in result_log_title.items():
         print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
-
         logs = result_log_title | result_log_keywords
-
-        wandb.log({"test/eval_table": eval_table})
-
+        wandb.log({"test/test_pred_table": eval_table})
         for metric_name in evaluator.get_metric_names:
             wandb.log(
                 {

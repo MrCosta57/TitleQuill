@@ -350,9 +350,6 @@ class Trainer:
         results = results_title | results_keywords
 
         if self.log_wandb:
-
-            # wandb.log({f"{eval_type}/eval_table": self.eval_pred_table})
-
             step = epoch if eval_type == "val" else 0
             for metric_name in self.evaluator.get_metric_names:
                 wandb.log(

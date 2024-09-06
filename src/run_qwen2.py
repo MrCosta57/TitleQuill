@@ -6,7 +6,7 @@ import hydra
 import wandb
 from datamodule.dataset import filter_on_stats, load_oagkx_dataset, OAGKXItem
 from utils.evaluator import Evaluator
-from utils.general_utils import seed_everything, setup_nltk
+from utils.general_utils import postprocess_validation_text, seed_everything, setup_nltk
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
@@ -61,14 +61,12 @@ def main(cfg):
     eval_table = None
 
     if log_wandb:
-
         # Add metrics
         for metric_name in evaluator.get_metric_names:
             wandb.define_metric(
                 f"test/{metric_name}",
                 step_metric=f"test_{metric_name}_step",
             )
-        
         eval_table = wandb.Table(
             columns=[
                 "GT_Title",
@@ -102,37 +100,39 @@ def main(cfg):
             output_ids[len(input_ids) :]
             for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
         ]
-        response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        response = tokenizer.batch_decode(
+            generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
 
         pred_split = Evaluator.split_title_keywords([response])
         pred_title, pred_keywords = zip(*pred_split)
-        pred_title = pred_title[0]
-        pred_keywords = pred_keywords[0]
+
+        pred_title, title = postprocess_validation_text(pred_title, [title])
 
         bin_keywords_list = Evaluator.binary_labels_keywords(
-            target_keywords=[keywords], pred_keywords=[pred_keywords]
+            target_keywords=[keywords], pred_keywords=pred_keywords
         )
         pred_binary, ref_binary = zip(*bin_keywords_list)
 
-        evaluator.add_batch_title(predicted=[pred_title], target=[title])
+        evaluator.add_batch_title(predicted=pred_title, target=title)
         evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
         if i % cfg.log_interval == 0:
 
             print_fn(f"Batch {i+1}/{len(dataset)}")
-            print_fn(f"True title:\n{title}")
+            print_fn(f"True title:\n{title[0]}")
             print_fn(f"True keywords:\n{keywords}")
             print_fn(f"Prediction:\n{response}")
-            
+
             if log_wandb and eval_table is not None:
                 eval_table.add_data(
-                    title,
-                    pred_title,
+                    title[0],
+                    pred_title[0],
                     " , ".join(keywords),
-                    " , ".join(pred_keywords),
+                    " , ".join(pred_keywords[0]),
                 )
 
-            # if i > 0: break
+        break
 
     result_title = evaluator.compute_title()
     result_keywords = evaluator.compute_keywords()
@@ -148,25 +148,8 @@ def main(cfg):
         print(f">> {metric_name.upper()}: {result}")
 
     if log_wandb:
-
         logs = result_title | result_keywords
-
-        wandb.log({"test/eval_table": eval_table})
-
-        for metric_name in evaluator.get_metric_names:
-            wandb.log(
-                {
-                    f"test/{metric_name}": logs[metric_name],
-                    f"test_{metric_name}_step": 0,
-                }
-            )
-    
-    if log_wandb:
-
-        logs = result_title | result_keywords
-
-        wandb.log({"test/eval_table": eval_table})
-
+        wandb.log({"test/test_pred_table": eval_table})
         for metric_name in evaluator.get_metric_names:
             wandb.log(
                 {
