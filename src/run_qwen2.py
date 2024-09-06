@@ -73,6 +73,7 @@ def main(cfg):
                 "Pred_Title",
                 "GT_Keywords",
                 "Pred_Keywords",
+                "Pred_text"
             ]
         )
 
@@ -102,9 +103,9 @@ def main(cfg):
         ]
         response = tokenizer.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )[0]
+        )
 
-        pred_split = Evaluator.split_title_keywords([response])
+        pred_split = Evaluator.split_title_keywords(response)
         pred_title, pred_keywords = zip(*pred_split)
 
         pred_title, title = postprocess_validation_text(pred_title, [title])
@@ -122,14 +123,15 @@ def main(cfg):
             print_fn(f"Batch {i+1}/{len(dataset)}")
             print_fn(f"True title:\n{title[0]}")
             print_fn(f"True keywords:\n{keywords}")
-            print_fn(f"Prediction:\n{response}")
+            print_fn(f"Prediction:\n{response[0]}")
 
             if log_wandb and eval_table is not None:
                 eval_table.add_data(
-                    title[0],
+                    item.title,
                     pred_title[0],
                     " , ".join(keywords),
                     " , ".join(pred_keywords[0]),
+                    response[0]
                 )
 
 
