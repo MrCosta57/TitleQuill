@@ -6,8 +6,8 @@ import wandb
 
 from datamodule.dataset import OAGKXItem, filter_on_stats, load_oagkx_dataset
 from model.text_rank import get_title_and_keywords
-from src.utils.evaluator import Evaluator
-from src.utils.general_utils import postprocess_validation_text, seed_everything, setup_nltk
+from utils.evaluator import Evaluator
+from utils.general_utils import postprocess_validation_text, seed_everything, setup_nltk
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")

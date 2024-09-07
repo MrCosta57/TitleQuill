@@ -10,8 +10,8 @@ from transformers.optimization import Adafactor
 from torch.utils.data import DataLoader
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from datasets import DatasetDict
-from src.utils.general_utils import postprocess_validation_text, split_keywords_by_comma
-from src.utils.evaluator import Evaluator
+from utils.general_utils import postprocess_validation_text, split_keywords_by_comma
+from utils.evaluator import Evaluator
 
 
 class Trainer:

@@ -1,4 +1,6 @@
 model_name: "Qwen2"
 model_type: "Qwen/Qwen2-0.5B-Instruct"
 
-max_new_tokens: 256
+max_new_tokens: 512
+max_length: 1024
+batch_size: 4

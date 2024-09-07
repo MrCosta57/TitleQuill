@@ -2,7 +2,7 @@ import sys
 import webbrowser
 import base64
 
-sys.path.append('.')
+sys.path.append(".")
 
 import os, glob, pathlib
 import subprocess
@@ -15,12 +15,12 @@ from transformers import (
 )
 import torch
 
-from src.utils.evaluator import Evaluator
+from utils.evaluator import Evaluator
 
 model_dir = "output"
 
 MODEL_DOUBLE_TASK = {
-    'combined_tasks_10': False,
+    "combined_tasks_10": False,
 }
 
 
@@ -33,7 +33,8 @@ def get_available_models():
     paths.sort()
     return paths
 
-def generate_pdf(abstract, title, keywords, out_dir = '.', out_name="document"):
+
+def generate_pdf(abstract, title, keywords, out_dir=".", out_name="document"):
 
     latex_template = f"""
     \\documentclass[12pt]{{article}}
@@ -60,28 +61,30 @@ def generate_pdf(abstract, title, keywords, out_dir = '.', out_name="document"):
     \\end{{document}}
     """
 
-    tex = os.path.join(out_dir, f'{out_name}.tex')
+    tex = os.path.join(out_dir, f"{out_name}.tex")
     # Write the LaTeX source to a file
-    with open(tex, 'w') as f:
+    with open(tex, "w") as f:
         f.write(latex_template)
 
     try:
         # Compile the LaTeX file to PDF
-        subprocess.run(['pdflatex', tex], check=True)
-        for ext in ['aux', 'log', 'tex']:
-            os.remove(os.path.join(out_dir, f'{out_name}.{ext}'))
-        
-        with open(os.path.join(out_dir, f'{out_name}.pdf'), "rb") as pdf_file:
+        subprocess.run(["pdflatex", tex], check=True)
+        for ext in ["aux", "log", "tex"]:
+            os.remove(os.path.join(out_dir, f"{out_name}.{ext}"))
+
+        with open(os.path.join(out_dir, f"{out_name}.pdf"), "rb") as pdf_file:
             pdf_data = pdf_file.read()
             return pdf_data
 
     except subprocess.CalledProcessError as e:
-        raise RuntimeError('pdflatex error')
+        raise RuntimeError("pdflatex error")
+
 
 def display_pdf(pdf_data):
-    base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
+    base64_pdf = base64.b64encode(pdf_data).decode("utf-8")
     pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf"></iframe>'
     st.markdown(pdf_display, unsafe_allow_html=True)
+
 
 # Load the model and tokenizer with device selection
 @st.cache_resource
@@ -107,6 +110,7 @@ def tokenize_input(
     )
     return tokens
 
+
 def prediction(model, tokenizer, input_text):
 
     tokenized_input = tokenize_input(input_text, tokenizer)
@@ -123,7 +127,6 @@ def prediction(model, tokenizer, input_text):
     )
 
     return generated_text
-
 
 
 # Initialize the Streamlit app
@@ -169,8 +172,10 @@ max_token_length = st.sidebar.slider(
 abstract_input = st.text_area("📃 Enter the abstract (max 512 tokens)", height=200)
 
 # Title and keywords session state initialization
-if 'title'    not in st.session_state: st.session_state['title'] = ''
-if 'keywords' not in st.session_state: st.session_state['keywords'] = ''
+if "title" not in st.session_state:
+    st.session_state["title"] = ""
+if "keywords" not in st.session_state:
+    st.session_state["keywords"] = ""
 
 if (
     st.button("Generate Title and Keywords 𓂃🖊")
@@ -186,11 +191,17 @@ if (
 
                     pred = {}
 
-                    for prefix, target in [("generate title", "Title"), ("generate keywords", "Keywords")]:
-                        prefix_abstract = f'{prefix}: {abstract_input}'
+                    for prefix, target in [
+                        ("generate title", "Title"),
+                        ("generate keywords", "Keywords"),
+                    ]:
+                        prefix_abstract = f"{prefix}: {abstract_input}"
                         pred[target] = prediction(model, tokenizer, prefix_abstract)
 
-                    st.session_state['title'], st.session_state['keywords'] = pred["Title"], pred["Keywords"]
+                    st.session_state["title"], st.session_state["keywords"] = (
+                        pred["Title"],
+                        pred["Keywords"],
+                    )
 
                 else:
 
@@ -200,18 +211,21 @@ if (
 
                     # generated_text = "Title: Title of the document\nKeywords: keyword1, keyword2, keyword3"
 
-                    st.session_state['title'], st.session_state['keywords'] = Evaluator.split_title_keywords([generated_text])[0]
+                    st.session_state["title"], st.session_state["keywords"] = (
+                        Evaluator.split_title_keywords([generated_text])[0]
+                    )
 
     else:
         st.warning("Please enter an abstract to generate the title and keywords.")
 
 # Display the generated title and keywords from session state, even after PDF generation
-if st.session_state['title'] or st.session_state['keywords']:
+if st.session_state["title"] or st.session_state["keywords"]:
 
-    title = st.session_state['title'].capitalize()
-    if title.endswith("."): title = title[:-1]
+    title = st.session_state["title"].capitalize()
+    if title.endswith("."):
+        title = title[:-1]
 
-    keywords = ', '.join(st.session_state['keywords'])
+    keywords = ", ".join(st.session_state["keywords"])
 
     st.subheader("🎯 Generated Title and Keywords")
     st.write(f"**Title**: {title}")
@@ -222,15 +236,22 @@ if st.session_state['title'] or st.session_state['keywords']:
         try:
 
             pdf_data = generate_pdf(abstract_input, title, keywords)
-    
+
             # Display the PDF preview in the app
             display_pdf(pdf_data)
-            
+
             # Provide a download button
-            st.download_button("Download PDF", pdf_data, file_name="paper.pdf", mime="application/octet-stream")
+            st.download_button(
+                "Download PDF",
+                pdf_data,
+                file_name="paper.pdf",
+                mime="application/octet-stream",
+            )
 
         except Exception as e:
-            st.warning("Impossible to generate PDF, missing LaTeX installation in your system.")
+            st.warning(
+                "Impossible to generate PDF, missing LaTeX installation in your system."
+            )
 
 # Footer
 st.markdown("---")

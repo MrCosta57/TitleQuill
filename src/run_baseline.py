@@ -1,7 +1,7 @@
 import os
 from omegaconf import DictConfig, OmegaConf
-from src.utils.general_utils import seed_everything, setup_nltk, postprocess_validation_text
-from src.utils.evaluator import Evaluator
+from utils.general_utils import seed_everything, setup_nltk, postprocess_validation_text
+from utils.evaluator import Evaluator
 from datamodule.dataset import OAGKXItem, filter_on_stats
 from datamodule.dataset import load_oagkx_dataset
 import hydra
@@ -112,7 +112,6 @@ def main(cfg):
                     " , ".join(true_keywords),
                     " , ".join(baseline_keywords),
                 )
-
 
     log_title = evaluator.compute_title()
     log_keywords = evaluator.compute_keywords()

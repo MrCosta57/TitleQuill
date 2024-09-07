@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
-#SBATCH --gres=gpumem:12G
+#SBATCH --gres=gpumem:32G
 #SBATCH --time=120:00:00
 #SBATCH --job-name="test"
 #SBATCH --mem-per-cpu=12G

@@ -31,7 +31,6 @@ from transformers import (
     PreTrainedTokenizerBase,
     PreTrainedTokenizer,
 )
-
 from src.utils.general_utils import split_keywords_by_comma
 
 
@@ -341,7 +340,7 @@ def apply_tokenization(
     # Tokenize inputs and labels
     model_inputs = tokenizer(
         input_str,
-        padding="max_length",
+        padding=True,
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
@@ -351,7 +350,7 @@ def apply_tokenization(
     # Tokenize labels
     label_encodings = tokenizer(
         label_str,
-        padding="max_length",
+        padding=True,
         max_length=max_length,
         truncation=True,
         return_tensors="pt",

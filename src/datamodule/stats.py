@@ -191,6 +191,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="data/OAGKX")
     parser.add_argument("--out_dir", type=str, default="figures")
-
     args = parser.parse_args()
     main(args)
