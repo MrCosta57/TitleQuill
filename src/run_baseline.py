@@ -113,7 +113,6 @@ def main(cfg):
                     " , ".join(baseline_keywords),
                 )
 
-
     log_title = evaluator.compute_title()
     log_keywords = evaluator.compute_keywords()
 
