@@ -1,4 +1,4 @@
-import os, glob
+import os, glob, pathlib
 import streamlit as st
 from transformers import (
     AutoTokenizer,
@@ -16,20 +16,18 @@ def get_num_devices():
 
 
 def get_available_models():
-    paths = os.listdir(model_dir)
-    paths = filter(lambda x: "model" in x, paths)
-    paths = list(paths)
+    paths = [p.name for p in pathlib.Path(model_dir).iterdir() if p.is_dir()]
     paths.sort()
     return paths
 
 
 # Load the model and tokenizer with device selection
 @st.cache_resource
-def load_model(model_name: str | None, device: torch.device):
-    if model_name is None:
+def load_model(model_main_dir: str | None, device: torch.device):
+    if model_main_dir is None:
         return None, None
-
-    tokenizer_name = model_name.replace("model", "tokenizer")
+    model_name = os.path.join(model_main_dir, "model")
+    tokenizer_name = os.path.join(model_main_dir, "tokenizer")
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     model = model.to(device)
@@ -98,16 +96,19 @@ if (
     if abstract_input:
         # Generate the title and keywords using the model
         with st.spinner("Generating... ✨"):
-            tokenized_input = tokenize_input(abstract_input, tokenizer)
-            inputs = {k: v.to(device) for k, v in tokenized_input.items()}
-            output = model.generate(
-                inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
-                max_length=max_token_length,
-            )
-            generated_text = tokenizer.decode(
-                output[0], clean_up_tokenization_spaces=True, skip_special_tokens=True
-            )
+            with torch.inference_mode():
+                tokenized_input = tokenize_input(abstract_input, tokenizer)
+                inputs = {k: v.to(device) for k, v in tokenized_input.items()}
+                output = model.generate(
+                    inputs["input_ids"],
+                    attention_mask=inputs["attention_mask"],
+                    max_length=max_token_length,
+                )
+                generated_text = tokenizer.decode(
+                    output[0],
+                    clean_up_tokenization_spaces=True,
+                    skip_special_tokens=True,
+                )
 
             # Display the generated title and keywords
             st.subheader("🎯 Generated Title and Keywords:")

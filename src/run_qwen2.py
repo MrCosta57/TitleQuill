@@ -79,11 +79,12 @@ def main(cfg):
 
     model = model.to(device)
     model.eval()
-    for i, data in enumerate(dataset):
-        item = OAGKXItem.from_json(data)  # type: ignore
-        abstract = item.abstract
-        title = "Title: " + item.title
-        keywords = item.keywords
+    with torch.no_grad():
+        for i, data in enumerate(dataset):
+            item = OAGKXItem.from_json(data)  # type: ignore
+            abstract = item.abstract
+            title = item.title
+            keywords = item.keywords
 
         prompt = template_prompt + abstract
         messages = [
@@ -108,20 +109,20 @@ def main(cfg):
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )
 
-        pred_split = Evaluator.split_title_keywords(response)
-        pred_title, pred_keywords = zip(*pred_split)
+            pred_split = Evaluator.split_title_keywords(response)
+            pred_title, pred_keywords = zip(*pred_split)
 
-        pred_title, title = postprocess_validation_text(pred_title, [title])
+            pred_title, title = postprocess_validation_text(pred_title, [title])
 
-        bin_keywords_list = Evaluator.binary_labels_keywords(
-            target_keywords=[keywords], pred_keywords=pred_keywords
-        )
-        pred_binary, ref_binary = zip(*bin_keywords_list)
+            bin_keywords_list = Evaluator.binary_labels_keywords(
+                target_keywords=[keywords], pred_keywords=pred_keywords
+            )
+            pred_binary, ref_binary = zip(*bin_keywords_list)
 
-        evaluator.add_batch_title(predicted=pred_title, target=title)
-        evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
+            evaluator.add_batch_title(predicted=pred_title, target=title)
+            evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
-        if i % cfg.log_interval == 0:
+            if i % cfg.log_interval == 0:
 
             print_fn(f"Batch {i+1}/{len(dataset)}")
             print_fn(f"True title:\n{title[0]}")
