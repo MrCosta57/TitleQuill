@@ -12,7 +12,7 @@ from transformers import (
     DataCollatorForSeq2Seq,
     PreTrainedTokenizer,
 )
-from utils.general_utils import split_keywords_by_comma
+from src.utils.general_utils import split_keywords_by_comma
 
 
 @dataclass

@@ -1,7 +1,7 @@
 from typing import List, Set, Tuple
 import evaluate
 import re
-from utils.general_utils import split_keywords_by_comma
+from src.utils.general_utils import split_keywords_by_comma
 
 
 class Evaluator:

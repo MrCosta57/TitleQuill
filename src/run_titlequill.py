@@ -6,9 +6,9 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     PreTrainedModel,
 )
-from utils.general_utils import seed_everything, setup_nltk
-from utils.loss import hf_loss_fn, twotasks_ce_eisl_loss_fn
-from utils.evaluator import Evaluator
+from src.utils.general_utils import seed_everything, setup_nltk
+from src.utils.loss import hf_loss_fn, twotasks_ce_eisl_loss_fn
+from src.utils.evaluator import Evaluator
 from datamodule.dataset import (
     load_oagkx_dataset,
     filter_on_stats,

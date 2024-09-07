@@ -5,8 +5,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import hydra
 import wandb
 from datamodule.dataset import filter_on_stats, load_oagkx_dataset, OAGKXItem
-from utils.evaluator import Evaluator
-from utils.general_utils import postprocess_validation_text, seed_everything, setup_nltk
+from src.utils.evaluator import Evaluator
+from src.utils.general_utils import postprocess_validation_text, seed_everything, setup_nltk
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
