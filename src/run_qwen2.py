@@ -17,9 +17,9 @@ from utils.general_utils import (
 
 template_prompt = (
     "Generate the title and the keywords from the provided abstract."
-    "Do not add any other information. Keywords should be comma-separated, not listed."
-    "Output MUST be in the format:\n"
-    "Title: [title]. Keywords: [keyword_1, keyword_2, keyword_3...]\n"
+    "Do not add any other information. Keywords should be comma-separated, NOT LISTED."
+    "Output MUST be as in this format example:\n"
+    "Title: <title>. Keywords: <keyword_1>, <keyword_2>, <keyword_3>, ...]\n"
     "The abstract is: {abstract}"
 )
 
@@ -123,7 +123,6 @@ def main(cfg):
     print_fn(f" - Device:      {device}")
     with torch.no_grad():
         for batch_id, batch in enumerate(dataloader):
-
             titles = batch["titles"]
             keywords = [set(split_keywords_by_comma(kw)) for kw in batch["keywords"]]
 
