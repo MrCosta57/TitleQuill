@@ -9,4 +9,5 @@ max_epochs: 5
 max_length: 512
 max_new_tokens: 150
 num_workers: 0
+debug_run: False
 lr: 0.001

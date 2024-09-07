@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
-#SBATCH --gres=gpumem:24G
+#SBATCH --gres=gpumem:12G
 #SBATCH --time=120:00:00
 #SBATCH --job-name="test"
 #SBATCH --mem-per-cpu=12G
@@ -16,6 +16,6 @@ export HF_HOME=".cache/huggingface"
 export HF_DATASETS_DISABLE_PROGRESS_BARS=1
 
 #python3 -u src/run_baseline.py
-#python3 -u src/run_qwen2.py
+python3 -u src/run_qwen2.py
 #python3 -u src/run_textrank.py
-python3 -u src/run_titlequill.py
+#python3 -u src/run_titlequill.py

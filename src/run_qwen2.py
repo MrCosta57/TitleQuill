@@ -46,8 +46,8 @@ def main(cfg):
     )
     dataset = dataset_dict["test"]
     # Encode input prompt
-    template_prompt = "Generate the title and the keywords from the below abstract. Do not add any other information and separate the keywords by the comma character.\
-        Output must be in the format:\nTitle: [title]\nKeywords: [keywords]\n\
+    template_prompt = "Generate the title and the keywords from the below abstract. Do not add any other information.\
+        Output MUST be in the format:\nTitle: [title]. Keywords: [keyword_1, keyword_2, ...]\n\
         The abstract is:"
     print_fn = print
 
@@ -73,7 +73,7 @@ def main(cfg):
                 "Pred_Title",
                 "GT_Keywords",
                 "Pred_Keywords",
-                "Pred_text"
+                "Pred_text",
             ]
         )
 
@@ -93,13 +93,16 @@ def main(cfg):
         text = tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
-        model_inputs = tokenizer([text], return_tensors="pt").to(device)  # type: ignore
+        model_input = tokenizer([text], return_tensors="pt")  # type: ignore
+        input_ids = model_input.input_ids.to(device)
+        attention_mask = model_input.attention_mask.to(device)
+
         generated_ids = model.generate(
-            model_inputs.input_ids, max_new_tokens=cfg.model.max_new_tokens
+            input_ids, attention_mask, max_new_tokens=cfg.model.max_new_tokens
         )
         generated_ids = [
             output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+            for input_ids, output_ids in zip(input_ids, generated_ids)
         ]
         response = tokenizer.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -131,9 +134,8 @@ def main(cfg):
                     pred_title[0],
                     " , ".join(keywords),
                     " , ".join(pred_keywords[0]),
-                    response[0]
+                    response[0],
                 )
-
 
     result_title = evaluator.compute_title()
     result_keywords = evaluator.compute_keywords()

@@ -111,11 +111,14 @@ def main(cfg):
         num_workers=cfg.model.num_workers,
         collate_fn=collate_fn,
         loss_fn=loss_fn,
+        debug_run=cfg.model.debug_run,
         log_interval=cfg.log_interval,
     )
 
     trainer.train()
-    trainer.save(os.path.join(cfg.output_dir, f"{cfg.model.strategy}_{cfg.max_epochs}"))
+    trainer.save(
+        os.path.join(cfg.output_dir, f"{cfg.model.strategy}_{cfg.model.max_epochs}")
+    )
     trainer.test()
 
 

@@ -29,6 +29,7 @@ class Trainer:
         collate_fn: Callable,
         loss_fn: Callable,
         evaluator: Evaluator,
+        debug_run: bool = False,
         log_wandb: bool = True,
         lr: float = 5e-4,
         num_workers: int = 4,
@@ -49,6 +50,7 @@ class Trainer:
         self.device = torch.device(device)
         self.model = model.to(self.device)  # type: ignore
         self.log_wandb = log_wandb
+        self.debug_run = debug_run
 
         # Tokenization
         self.tokenizer = tokenizer
@@ -160,8 +162,6 @@ class Trainer:
                 loss_batches.append(loss.item())
 
                 # Log
-                # TODO REMOVE
-                # if batch_id % 2 == 0:
                 if batch_id % self.log_interval == 0:
                     if self.log_wandb:
                         wandb.log(
@@ -174,11 +174,15 @@ class Trainer:
                     self.log_fn(
                         f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
-                    if batch_id % (self.log_interval * 5) == 0:
-                        self._print_eval_train(batch, outputs, epoch, batch_id)
+                if batch_id % (self.log_interval * 5) == 0:
+                    self._print_eval_train(batch, outputs, epoch, batch_id)
 
-                # TODO REMOVE
-                # if batch_id == 10: break
+                if (
+                    self.debug_run
+                    and batch_id != 0
+                    and batch_id % (self.log_interval * 5) == 0
+                ):
+                    break
 
             if self.log_wandb:
                 wandb.log(
@@ -191,8 +195,8 @@ class Trainer:
             # Perform validation
             self.validation(epoch=epoch)
 
-            # TODO REMOVE
-            # if epoch == 5: break
+            if self.debug_run:
+                break
 
         if self.log_wandb:
             wandb.log({"train/train_pred_table": self.train_pred_table})
@@ -335,8 +339,8 @@ class Trainer:
 
                     table.add_data(*data)
 
-            # TODO REMOVE
-            # if i == 10: break
+            if self.debug_run:
+                break
 
         # Compute metrics
         if eval_type == "val":
@@ -379,7 +383,7 @@ class Trainer:
             predicted_text = self.tokenizer.batch_decode(
                 predicted_ids,
                 clean_up_tokenization_spaces=False,
-                skip_special_tokens=True,
+                skip_special_tokens=False,
             )
             # Decode the ground truth labels
             if "labels" in batch:
@@ -390,7 +394,7 @@ class Trainer:
                 ground_truth_text = self.tokenizer.batch_decode(
                     ground_truth_ids,
                     clean_up_tokenization_spaces=False,
-                    skip_special_tokens=True,
+                    skip_special_tokens=False,
                 )
 
                 # Print the first example and the one in the middle
