@@ -1,3 +1,7 @@
+"""
+This script computes and plots statistics about the OAGKX dataset.
+"""
+
 from __future__ import annotations
 import os
 import pickle
@@ -17,6 +21,15 @@ def line_plot(
     ylabel: str = "",
     save_path: str = "plot.png",
 ):
+    """
+    Function to plot a line plot of the data.
+
+    :param data: Dictionary containing the data to plot.
+    :param title: Title of the plot.
+    :param xlabel: Label for the x-axis.
+    :param ylabel: Label for the y-axis.
+    :param save_path: Path to save the
+    """
 
     # ----------- HYERPARAMETERS ------------
 
@@ -54,7 +67,7 @@ def line_plot(
     # Customize labels and title
     ax.set_xlabel(xlabel, fontsize=AXES_FONT)
     ax.set_ylabel(ylabel, fontsize=AXES_FONT)
-    ax.set_title(title, fontsize=TITLE_FONT)
+    ax.set_title (title, fontsize=TITLE_FONT)
 
     # Set y-axis limits to the original scale of the data
     # ax.set_ylim(min(y) - YPADDING, max(y) + YPADDING)
@@ -71,6 +84,12 @@ def line_plot(
 
 
 def plot_stats(stats: Dict[str, Dict[int, int]], out_dir: str):
+    """
+    Save plots of the statistics in the stats dictionary.
+
+    :param stats: Dictionary containing the statistics to plot.
+    :param out_dir: Directory to save the plots.
+    """
 
     def dict_to_cumulative(dict_: Dict[int, int]) -> Dict[int, int]:
         """Transpose a count dictionary into a cumulative-count dictionary"""
@@ -103,7 +122,11 @@ def plot_stats(stats: Dict[str, Dict[int, int]], out_dir: str):
             )
 
 
-def mapping_function(elements) -> Dict[str, Any]:
+def mapping_function(elements: Dict) -> Dict[str, Any]:
+    """
+    :param elements:  A dictionary containing the elements of the dataset.
+    """
+    
     stats = {
         "abstract_length": [
             OAGKXItem.from_data(
@@ -125,6 +148,7 @@ def mapping_function(elements) -> Dict[str, Any]:
 
 
 def main(args: argparse.Namespace):
+
     out_dir = args.out_dir
     data_dir = args.data_dir
 
@@ -144,6 +168,7 @@ def main(args: argparse.Namespace):
     stats_dataset = dataset.map(
         mapping_function, remove_columns=dataset.column_names, batched=True
     )
+
     print(stats_dataset)
     print(stats_dataset[0])
 
@@ -162,8 +187,10 @@ def main(args: argparse.Namespace):
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="data/OAGKX")
     parser.add_argument("--out_dir", type=str, default="figures")
+
     args = parser.parse_args()
     main(args)
