@@ -49,11 +49,13 @@ def generate_pdf(abstract, title, keywords, out_dir = '.', out_name="document"):
 
     \\maketitle
 
-    \\begin{{abstract}}
+    \\section*{{Abstract}}
     {abstract}
-    \\end{{abstract}}
 
-    \\textbf{{Keywords:}} {keywords}
+    \\vspace{{0.5cm}}
+    \\hspace{{0.15cm}}
+    \\small{{\\textbf{{Keywords:}} {keywords}}}
+
 
     \\end{{document}}
     """
@@ -205,15 +207,21 @@ if (
 
 # Display the generated title and keywords from session state, even after PDF generation
 if st.session_state['title'] or st.session_state['keywords']:
+
+    title = st.session_state['title'].capitalize()
+    if title.endswith("."): title = title[:-1]
+
+    keywords = ', '.join(st.session_state['keywords'])
+
     st.subheader("🎯 Generated Title and Keywords")
-    st.write(f"**Title**: {st.session_state['title']}")
-    st.write(f"**Keywords**: {', '.join(st.session_state['keywords'])}")
+    st.write(f"**Title**: {title}")
+    st.write(f"**Keywords**: {keywords}")
 
     # Button to generate the PDF
     if st.button("Generate PDF 𓂃📄"):
         try:
 
-            pdf_data = generate_pdf(abstract_input, st.session_state['title'], st.session_state['keywords'])
+            pdf_data = generate_pdf(abstract_input, title, keywords)
     
             # Display the PDF preview in the app
             display_pdf(pdf_data)
