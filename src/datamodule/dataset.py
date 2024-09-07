@@ -244,7 +244,7 @@ def apply_tokenization(
     # Tokenize inputs and labels
     model_inputs = tokenizer(
         input_str,
-        padding="max_length",
+        padding=True,
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
@@ -252,7 +252,7 @@ def apply_tokenization(
     )
     label_encodings = tokenizer(
         label_str,
-        padding="max_length",
+        padding=True,
         max_length=max_length,
         truncation=True,
         return_tensors="pt",
