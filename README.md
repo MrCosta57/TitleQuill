@@ -101,7 +101,7 @@ python src/run_textrank.py
 The project includes a Streamlit GUI for the TitleQuill model. To run the GUI, execute the following command:
 ```bash
 # Activate your environment
-streamlit run gui/app.py
+streamlit run src/app.py
 ```
 
 ## Citations

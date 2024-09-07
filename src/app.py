@@ -1,11 +1,6 @@
-import sys
-import webbrowser
-import base64
+import os
 
-sys.path.append(".")
-
-import os, glob, pathlib
-import subprocess
+import pathlib, base64, subprocess
 import streamlit as st
 from transformers import (
     AutoTokenizer,
@@ -14,7 +9,6 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 import torch
-
 from utils.evaluator import Evaluator
 
 model_dir = "output"
@@ -130,7 +124,9 @@ def prediction(model, tokenizer, input_text):
 
 
 # Initialize the Streamlit app
-st.title("🪶TitleQuill: Title & Keywords generation with Pre-trained Models🪶")
+st.title(
+    "🪶TitleQuill: Unified Framework for Titles and Keywords Generation using Pre-Trained Model🪶"
+)
 st.markdown(
     """
 **Authors**:  
