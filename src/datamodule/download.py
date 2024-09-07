@@ -1,3 +1,7 @@
+"""
+This module contains the Downloader class to download a dataset from a URL, save it to a target directory and preprocess it.
+"""
+
 import glob
 import os
 from urllib.parse import urlparse
@@ -21,6 +25,15 @@ class Downloader:
         unzip: bool = True,
         logger: Logger = logging.getLogger(__name__),
     ):
+        """
+        Initializes the Downloader object.
+
+        :param url: URL to download the dataset from.
+        :param target_dir: Directory to save the dataset.
+        :param unzip: Whether to unzip the downloaded file.
+        :param logger: Logger object to log messages.
+        """
+
         self.URL = url
         self._target_dir = target_dir
         self._unzip = unzip
@@ -32,9 +45,12 @@ class Downloader:
             os.makedirs(name=target_dir, exist_ok=True)
 
     def __str__(self) -> str:
+        """ Returns a string representation of the Downloader object. """
+
         return f"Downloader[target_dir={self._target_dir}]"
 
     def __repr__(self) -> str:
+        """ Returns a string representation of the Downloader object"""
         return str(self)
 
     def download(self):
@@ -97,17 +113,30 @@ class OAGKXDownloader(Downloader):
 
     def __init__(
         self,
-        url: str,
         target_dir: str,
         unzip: bool = True,
         logger: Logger = logging.getLogger(__name__),
     ):
+        """ 
+        Initializes the OAGKXDownloader object.
+        
+        :param url: URL to download the dataset from.
+        :param target_dir: Directory to save the dataset.
+        :param unzip: Whether to unzip the downloaded file.
+        :param logger: Logger object to log messages.
+
+        """
+
+        url = "https://lindat.cz/repository/xmlui/bitstream/handle/11234/1-3062/oagkx.zip?sequence=1&isAllowed=y"
+
         super().__init__(url, target_dir, unzip, logger)
 
     def __str__(self) -> str:
+
         return f"OAGKX{super().__str__()}"
 
     def postprocess(self, old_ext: str = "txt", new_ext: str = "jsonl"):
+
         self._logger.info(msg="Postprocessing files...")
         self._logger.info(msg=f" > Old extension: {old_ext}")
         self._logger.info(msg=f" > New extension: {new_ext}")
@@ -141,13 +170,15 @@ def main(args: argparse.Namespace):
     logging.basicConfig(level=logging.INFO)
 
     # Download the dataset
-    downloader = OAGKXDownloader(url=args.url, target_dir=args.data_dir)
+    downloader = OAGKXDownloader(target_dir=args.data_dir)
     downloader.download()
+
     # Preprocess the files
     downloader.postprocess(old_ext=args.old_ext_postproc, new_ext=args.new_ext_postproc)
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--data_dir",
@@ -174,4 +205,5 @@ if __name__ == "__main__":
         help="New extension of the files to postprocess",
     )
     args = parser.parse_args()
+
     main(args)
