@@ -163,7 +163,14 @@ def main(args: argparse.Namespace):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="data/OAGKX")
-    parser.add_argument("--out_dir", type=str, default="figures")
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default="data/OAGKX",
+        help="Directory to save the dataset",
+    )
+    parser.add_argument(
+        "--out_dir", type=str, default="figures", help="Directory to save the plots"
+    )
     args = parser.parse_args()
     main(args)
