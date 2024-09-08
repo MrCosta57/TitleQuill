@@ -66,7 +66,7 @@ python src/datamodule/stats.py
 
 ## Model weights
 
-The models weights can be obtained from this [link](https://drive.google.com/drive/folders/1yVKkDVj1UrwRl_EAPzG9yUr4zOoRRdjO?usp=drive_link). Please place the weights in the `output/` directory.
+The models weights can be obtained from this [link](https://drive.google.com/drive/folders/1yVKkDVj1UrwRl_EAPzG9yUr4zOoRRdjO?usp=drive_link). Please place the entire folder containing model and tokenizer in the `output/` directory.
 
 
 ## How to run
