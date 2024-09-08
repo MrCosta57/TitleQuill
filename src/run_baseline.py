@@ -1,3 +1,5 @@
+""" This script compute baselines metrics for the OAGKX dataset. """
+
 import os
 from omegaconf import DictConfig, OmegaConf
 from utils.general_utils import seed_everything, setup_nltk, postprocess_validation_text
@@ -7,17 +9,19 @@ from datamodule.dataset import load_oagkx_dataset
 import hydra
 import wandb
 
-# Load config
+# Strategies
 BASELINE_STRATEGIES = ["first_sentence", "with_more_kw"]
 
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
 def main(cfg):
+    
+    # Initialize
     setup_nltk()
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
     assert cfg is not None
-    if cfg.get("model") == None:
+    if cfg.get("model") == None: # type: ignore
         conf = OmegaConf.load("configs/model/baseline.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
@@ -25,6 +29,7 @@ def main(cfg):
     assert cfg.model.title_strategy in BASELINE_STRATEGIES
     title_strategy = cfg.model.title_strategy
 
+    # Initialize wandb
     if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
@@ -39,6 +44,7 @@ def main(cfg):
             },
         )
 
+    # Load dataset test instances
     dataset_dict = load_oagkx_dataset(
         data_dir=cfg.data.data_dir,
         split_size=tuple(cfg.data.split_size),
@@ -47,12 +53,17 @@ def main(cfg):
     )
     dataset = dataset_dict["test"]
 
+    # Load evaluator
     evaluator = Evaluator(
         metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
     )
 
-    test_wandb_table = None
+
+    # Wanb table and metrics
     if log_wandb:
+
+        test_wandb_table = None
+
         # Add metrics
         for metric_name in evaluator.get_metric_names:
             wandb.define_metric(
@@ -68,12 +79,15 @@ def main(cfg):
             ]
         )
 
+    # Iterate over the dataset
     for i, data in enumerate(dataset):
-        item = OAGKXItem.from_json(data)  # type: ignore
 
+        # Extract data
+        item = OAGKXItem.from_json(data)  # type: ignore
         true_title = item.title
         true_keywords = item.keywords
 
+        # Title baseline
         if title_strategy == "with_more_kw":
             baseline_title, _ = item.sentence_with_more_keywords
         elif title_strategy == "first_sentence":
@@ -83,20 +97,24 @@ def main(cfg):
                 f"Title strategy {title_strategy} not implemented"
             )
 
+        # Keywords baseline
         baseline_keywords = set(item.get_most_frequent_words().keys())
 
-        # Convert lists to binary format
         bin_keywords_list = Evaluator.binary_labels_keywords(
             [true_keywords], [baseline_keywords]
         )
         pred_binary, ref_binary = zip(*bin_keywords_list)
 
+        # Postprocess
         baseline_title, true_title = postprocess_validation_text(
             [baseline_title], [true_title]
         )
+
+        # Add to evaluator
         evaluator.add_batch_title(baseline_title, true_title)
         evaluator.add_batch_keywords(pred_binary, ref_binary)
 
+        # Logging
         if i % cfg.log_interval == 0:
 
             print(f"Batch {i+1}/{len(dataset)}")
@@ -113,6 +131,7 @@ def main(cfg):
                     " , ".join(baseline_keywords),
                 )
 
+    # Compute metrics
     log_title = evaluator.compute_title()
     log_keywords = evaluator.compute_keywords()
 
@@ -126,6 +145,7 @@ def main(cfg):
     for metric_name, result in log_keywords.items():
         print(f">> {metric_name.upper()}: {result}")
 
+    # Log to wandb
     if log_wandb:
         logs = log_title | log_keywords
         wandb.log({"test/test_pred_table": test_wandb_table})

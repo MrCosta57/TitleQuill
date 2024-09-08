@@ -1,44 +1,84 @@
+""" Loss functions for the model. """
+
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
 
-def hf_loss_fn(batch, outputs, lambda_=1.0):
+def hf_loss_fn(batch, outputs):
+    """ 
+    Apply cross-entropy loss with Hugging Face's Trainer output 
+    
+    :param batch: The batch of data
+    :param outputs: The model outputs
+    """
+
     loss = outputs.loss
     return loss
 
 
-def apply_ce(logits, labels):
-    """Apply cross-entropy loss with tensors reshaped"""
+def _apply_ce(logits, labels):
+    """
+    Apply cross-entropy loss with tensors reshaping
+    
+    :param logits: The model logits
+    :param labels: The labels
+    """
+
     # Reshape logits and labels
     batch_size, seq_len, num_classes = logits.shape
+
     # Shape [batch_size * sequence_length, num_classes]
     logits = logits.reshape(-1, num_classes)
+
     # Shape [batch_size * sequence_length]
     labels = labels.reshape(-1)
+
     return F.cross_entropy(logits, labels, ignore_index=-100)
 
 
 def twotasks_ce_loss_fn(batch, outputs, lambda_=1.0):
+    """
+    Perform cross-entropy loss for two tasks, allowing for a lambda weighting value
+
+    :param batch: The batch of data
+    :param outputs: The model outputs
+    :param lambda_: The lambda weighting value
+    """
+
+    # Batch splitted into two halves, one for each task
     half_batch_len = len(batch["labels"]) // 2
     title_logits = outputs["logits"][0:half_batch_len]
     keywords_logits = outputs["logits"][half_batch_len:]
     title_labels = batch["labels"][0:half_batch_len]
     keywords_labels = batch["labels"][half_batch_len:]
 
-    title_loss = apply_ce(title_logits, title_labels)
-    keywords_loss = apply_ce(keywords_logits, keywords_labels)
+    # Apply cross-entropy loss
+    title_loss = _apply_ce(title_logits, title_labels)
+    keywords_loss = _apply_ce(keywords_logits, keywords_labels)
 
+    # combined_loss = lambda_ * title_loss + (1 - lambda_) * keywords_loss
     combined_loss = title_loss + keywords_loss
     return combined_loss
 
 
 def twotasks_ce_eisl_loss_fn(batch, outputs, lambda_=1.0):
+    """
+    Perform cross-entropy loss for two tasks, allowing for a lambda weighting value
 
-    # Generates a list of n-gram lengths based on the provided ngram configuration and the output length of the model.
-    # Returns a sorted list of valid n-gram values, or just the output_length if none are valid.
-    def config_ngram_list(ngram, output_length):
-        # ngram = [64,64,64]
+    :param batch: The batch of data
+    :param outputs: The model outputs
+    :param lambda_: The lambda weighting value
+    """
+
+    def config_ngram_list(ngram, output_length) -> list:
+        """
+        Generate a list of n-gram lengths based on the provided ngram configuration and the output length of the model.
+
+        :param ngram: The n-gram configuration
+        :param output_length: The output length of the model
+        :return: A sorted list of valid n-gram values, or just the output_length if none are valid
+        """
         ngram_list = set()
         for n in ngram:
             if n > 0:
@@ -55,24 +95,19 @@ def twotasks_ce_eisl_loss_fn(batch, outputs, lambda_=1.0):
 
         return ngram_list
 
-    # Computes the Expected Inverse Sequence Likelihood (EISL) loss with convolution for the n-grams.
     def batch_log_EISL_cnn(
         decoder_outputs, target_idx, ngram_list, pad=1, weight_list=None
     ):
         """
-        decoder_outputs: [batch_size, output_len, vocab_size]
-            - matrix with probabilityes  -- log probs
-        target_variable: [batch_size, target_len]
-            - reference batch
-        ngram_list: int or List[int]
-            - n-gram to consider
-        pad: int
-            the idx of "pad" token
-        weight_list : List
-            corresponding weight of ngram
+        Perform Expected Inverse Sequence Likelihood (EISL) loss with convolution for the n-grams.
 
-        NOTE: output_len == target_len
+        :param decoder_outputs: The model logits
+        :param target_idx: The target indices
+        :param ngram_list: The n-gram list
+        :param pad: The padding value
+        :param weight_list: The weight list
         """
+
         batch_size, output_len, vocab_size = decoder_outputs.size()
         _, tgt_len = target_idx.size()
 
@@ -86,6 +121,7 @@ def twotasks_ce_eisl_loss_fn(batch, outputs, lambda_=1.0):
         decoder_outputs = (
             torch.relu(decoder_outputs + 20) - 20
         )  # "+20 -20" to filter out very low probabilities, maintaining numerical stability during subsequent calculations
+
 
         # [batch_size, output_len, target_len]
         index = target_idx.unsqueeze(1).expand(-1, output_len, tgt_len)
@@ -128,7 +164,7 @@ def twotasks_ce_eisl_loss_fn(batch, outputs, lambda_=1.0):
     title_labels = batch["labels"][0:half_batch_len]
     keywords_labels = batch["labels"][half_batch_len:]
 
-    title_loss = apply_ce(title_logits, title_labels)
+    title_loss = _apply_ce(title_logits, title_labels)
 
     log_probs = F.log_softmax(keywords_logits, dim=-1)
 

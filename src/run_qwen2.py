@@ -1,3 +1,5 @@
+""" Run the Qwen2 model on the OAGKX dataset. """
+
 from functools import partial
 import os
 from omegaconf import DictConfig, OmegaConf
@@ -25,7 +27,16 @@ template_prompt = (
 
 
 def custom_qwen2_collate_fn(batch, tokenizer, max_length):
+    """ 
+    Custom collate function for Qwen2 model. 
+    
+    :param batch: List of dictionaries with keys: "abstract", "title", "keywords"
+    :param tokenizer: Tokenizer object
+    :param max_length: Maximum length of the input sequence
+    """
+
     prompts = [template_prompt.format(abstract=item["abstract"]) for item in batch]
+
     messages = [
         [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -33,9 +44,12 @@ def custom_qwen2_collate_fn(batch, tokenizer, max_length):
         ]
         for prompt in prompts
     ]
+
     texts = tokenizer.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True
     )
+
+
     result = tokenizer(texts, padding=True, max_length=max_length, truncation=True, return_tensors="pt")  # type: ignore
     result["titles"] = [item["title"] for item in batch]
     result["keywords"] = [item["keywords"] for item in batch]
@@ -44,6 +58,8 @@ def custom_qwen2_collate_fn(batch, tokenizer, max_length):
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
 def main(cfg):
+
+    # Initialize
     setup_nltk()
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
@@ -53,7 +69,9 @@ def main(cfg):
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
     log_wandb: bool = cfg.get("logger") is not None
+    device = torch.device(cfg.device)
 
+    # Initialize wandb
     if log_wandb:
         wandb.require("core")
         wandb.login(key=os.getenv("WANDB_API_KEY"))
@@ -68,12 +86,14 @@ def main(cfg):
             },
         )
 
-    device = torch.device(cfg.device)
+    # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(cfg.model.model_type)
     tokenizer = AutoTokenizer.from_pretrained(
         cfg.model.model_type,
         padding_side="left",
     )
+
+    # Load dataset test instances
     dataset_dict = load_oagkx_dataset(
         data_dir=cfg.data.data_dir,
         split_size=tuple(cfg.data.split_size),
@@ -83,12 +103,16 @@ def main(cfg):
     dataset = dataset_dict["test"]
     print_fn = print
 
+    # Load evaluator
     evaluator = Evaluator(
         metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
     )
 
-    eval_table = None
+    # Wanb table and metrics
     if log_wandb:
+        
+        eval_table = None
+
         # Add metrics
         for metric_name in evaluator.get_metric_names:
             wandb.define_metric(

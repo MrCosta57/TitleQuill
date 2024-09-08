@@ -1,36 +1,62 @@
-import os
+"""
+This script serves as a GUI to explore TitleQuill
+"""
 
-import pathlib, base64, subprocess
+import os
+import pathlib
+import base64
+import subprocess
+from typing import Dict
+
 import streamlit as st
+import torch
 from transformers import (
     AutoTokenizer,
     AutoModelForSeq2SeqLM,
     PreTrainedTokenizer,
     PreTrainedTokenizerFast,
 )
-import torch
+
 from utils.evaluator import Evaluator
 
-model_dir = "output"
+MODEL_DIR = "output"
 
-MODEL_DOUBLE_TASK = {
+MODEL_DOUBLE_TASK: Dict[str, bool] = {
     "combined_tasks_10": False,
 }
 
+def get_num_devices() -> int:
+    """ 
+    Get the number of available devices
+    Returns one if only CPU and more than one if GPU is available
+    """
 
-def get_num_devices():
     return 1 + torch.cuda.device_count() if torch.cuda.is_available() else 1
 
 
-def get_available_models():
-    paths = [p.name for p in pathlib.Path(model_dir).iterdir() if p.is_dir()]
+def get_available_models() -> list[str]:
+    """ 
+    Returns the list of available models
+    """
+    
+    paths = [p.name for p in pathlib.Path(MODEL_DIR).iterdir() if p.is_dir()]
     paths.sort()
+
     return paths
 
 
-def generate_pdf(abstract, title, keywords, out_dir=".", out_name="document"):
+def generate_pdf(
+    abstract: str, 
+    title: str,
+    keywords: str, 
+    out_dir: str=".", 
+    out_name: str ="document"
+):
+    
+    def get_fp(ext: str) -> str:
+        return os.path.join(out_dir, f"{out_name}.{ext}")
 
-    latex_template = f"""
+    TEMPLATE = f"""
     \\documentclass[12pt]{{article}}
     \\usepackage[utf8]{{inputenc}}
     \\usepackage{{amsmath}}
@@ -55,16 +81,18 @@ def generate_pdf(abstract, title, keywords, out_dir=".", out_name="document"):
     \\end{{document}}
     """
 
-    tex = os.path.join(out_dir, f"{out_name}.tex")
+    tex = get_fp(ext="tex")
+
     # Write the LaTeX source to a file
     with open(tex, "w") as f:
-        f.write(latex_template)
+        f.write(TEMPLATE)
 
     try:
+
         # Compile the LaTeX file to PDF
         subprocess.run(["pdflatex", tex], check=True)
         for ext in ["aux", "log", "tex"]:
-            os.remove(os.path.join(out_dir, f"{out_name}.{ext}"))
+            os.remove(get_fp(ext=ext))
 
         with open(os.path.join(out_dir, f"{out_name}.pdf"), "rb") as pdf_file:
             pdf_data = pdf_file.read()
@@ -74,22 +102,33 @@ def generate_pdf(abstract, title, keywords, out_dir=".", out_name="document"):
         raise RuntimeError("pdflatex error")
 
 
-def display_pdf(pdf_data):
+def display_pdf(pdf_data: bytes):
+    """ Display the PDF in the app """
+
     base64_pdf = base64.b64encode(pdf_data).decode("utf-8")
     pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf"></iframe>'
+
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 
 # Load the model and tokenizer with device selection
 @st.cache_resource
 def load_model(model_main_dir: str | None, device: torch.device):
+    """ Load the model and tokenizer from the given directory """
+
+    # Return None if the model directory is not provided
     if model_main_dir is None:
         return None, None
+    
+    # Load the model and tokenizer
     model_name = os.path.join(model_main_dir, "model")
     tokenizer_name = os.path.join(model_main_dir, "tokenizer")
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
+    # Move the model to the selected device
     model = model.to(device)
+
     return model, tokenizer
 
 
@@ -98,22 +137,45 @@ def tokenize_input(
     abstract: str,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     max_tokens: int = 512,
-):
+) -> Dict[str, torch.Tensor]:
+    """ 
+    Tokenize the input text and check the token count 
+    
+    :param abstract: The input text to tokenize
+    :param tokenizer: The tokenizer to use
+    :param max_tokens: The maximum number of tokens to use
+    """
+
     tokens = tokenizer(
         abstract, return_tensors="pt", truncation=True, max_length=max_tokens
     )
-    return tokens
+
+    return tokens # type: ignore
 
 
-def prediction(model, tokenizer, input_text):
+def prediction(
+    model: AutoModelForSeq2SeqLM, 
+    tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+    input_text: str
+):
+    """
+    Perform the prediction using the model and tokenizer
+
+    :param model: The model to use for prediction
+    :param tokenizer: The tokenizer to use for prediction
+    :param input_text: The input text to generate the output from
+    """
 
     tokenized_input = tokenize_input(input_text, tokenizer)
+
     inputs = {k: v.to(device) for k, v in tokenized_input.items()}
-    output = model.generate(
+
+    output = model.generate( # type: ignore
         inputs["input_ids"],
         attention_mask=inputs["attention_mask"],
         max_length=max_token_length,
     )
+
     generated_text = tokenizer.decode(
         output[0],
         clean_up_tokenization_spaces=True,
@@ -138,11 +200,11 @@ st.markdown(
 )
 
 st.write("Welcome to **TitleQuill**!")
+
 st.caption(
     "This app generates precise title and suitable keywords from a given abstract using a state-of-the-art model. 🚀"
 )
 
-# Sidebar options
 st.sidebar.header("Configuration")
 
 # Device selection dropdown in the sidebar
@@ -153,10 +215,15 @@ device_option = st.sidebar.selectbox(
         "CPU" if idx == 0 else f"GPU ({torch.cuda.get_device_name(idx-1)})"
     ),
 )
+
+# Model selection dropdown in the sidebar
 model_options = st.sidebar.selectbox("Select the model", get_available_models())
 
+# Load the model and tokenizer
 device = torch.device(f"cuda:{device_option-1}" if device_option > 0 else "cpu")
-model_name = None if not model_options else os.path.join(model_dir, model_options)
+
+# Load the model and tokenizer
+model_name = None if not model_options else os.path.join(MODEL_DIR, model_options)
 model, tokenizer = load_model(model_name, device)
 
 # Max token length slider in the sidebar
@@ -173,16 +240,20 @@ if "title" not in st.session_state:
 if "keywords" not in st.session_state:
     st.session_state["keywords"] = ""
 
+# Title generation button
 if (
     st.button("Generate Title and Keywords 𓂃🖊")
     and model is not None
     and tokenizer is not None
 ):
     if abstract_input:
+
         # Generate the title and keywords using the model
         with st.spinner("Generating... ✨"):
+
             with torch.inference_mode():
 
+                # Double task
                 if MODEL_DOUBLE_TASK[model_options]:
 
                     pred = {}
@@ -199,6 +270,7 @@ if (
                         pred["Keywords"],
                     )
 
+                # Single task
                 else:
 
                     prefix_abstract = f"generate title and keywords: {abstract_input}"

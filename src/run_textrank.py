@@ -1,3 +1,5 @@
+""" Run the TextRank model on the OAGKX dataset. """
+
 import os
 import hydra
 from omegaconf import DictConfig, OmegaConf

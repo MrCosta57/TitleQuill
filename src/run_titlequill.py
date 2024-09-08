@@ -1,3 +1,5 @@
+""" Main script to run the TitleQuill model. """
+
 from functools import partial
 import os
 import torch
