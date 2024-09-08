@@ -104,7 +104,7 @@ The project includes a Streamlit GUI for the TitleQuill model. To run the GUI, e
 streamlit run src/app.py
 ```
 
-## Citations
+## References
 
 ```
 @misc{flan_t5,
