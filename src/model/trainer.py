@@ -2,7 +2,6 @@ from datetime import datetime
 import itertools
 import os
 from typing import Callable, Dict, List, Literal, Optional, Tuple
-import loguru
 import torch
 import wandb
 from functools import partial
@@ -38,7 +37,32 @@ class Trainer:
         val_batch_size: int = 128,
         log_interval: int = 100,
     ):
+        '''
+        Trainer class for training a model on a dataset.
 
+        :param model: The model to train.
+        :param dataset_dict: A dictionary containing the train, validation, and test datasets.
+        :param tokenizer: The tokenizer used to tokenize the input data.
+        :param device: The device to train the model on.
+        :param shuffle: Whether to shuffle the training data.
+        :param max_length: The maximum length of the input sequence.
+        :param max_new_tokens: The maximum number of tokens to generate.
+        :param max_epochs: The maximum number of epochs to train the model.
+        :param double_task: Whether the model is trained on two tasks.
+        :param collate_fn: The function used to collate the data.
+        :param loss_fn: The loss function used to compute the loss.
+        :param evaluator: The evaluator used to compute the evaluation metrics.
+        :param debug_run: Whether to run the model in debug mode.
+        :param log_wandb: Whether to log the training process to Weights & Biases.
+        :param lr: The learning rate used by the optimizer.
+        :param num_workers: The number of workers used by the DataLoader.
+        :param sep_special_tokens: The special token used to separate the two tasks.
+        :param train_batch_size: The batch size used for training.
+        :param val_batch_size: The batch size used for validation.
+        :param log_interval: The interval at which to log the training process.
+        '''
+
+        # Check all splits are present
         assert all(
             [
                 split_name in dataset_dict.keys()
@@ -48,7 +72,7 @@ class Trainer:
 
         # Model and Device
         self.device = torch.device(device)
-        self.model = model.to(self.device)  # type: ignore
+        self.model: PreTrainedModel = model.to(self.device)  # type: ignore
         self.log_wandb = log_wandb
         self.debug_run = debug_run
 
@@ -85,20 +109,17 @@ class Trainer:
         self.evaluator = evaluator
 
     def train(self):
+        """
+        Train the model on the training dataset.
+        """
 
         # Logging function
         # self.log_fn = lambda x: None
-
         self.log_fn = print
-        """loguru.logger.add(
-            f"logs/training-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log",
-            level="INFO",
-        )
-        self.log_fn = loguru.logger.info """
 
-        # Define step metrics
-
+        # Define metrics and tables
         if self.log_wandb:
+
             wandb.define_metric("train/loss", step_metric="train_loss_step")
             wandb.define_metric("train/epoch_loss", step_metric="train_epoch_loss_step")
 
@@ -110,21 +131,7 @@ class Trainer:
                     f"{eval_type}/{metric_name}",
                     step_metric=f"{eval_type}_{metric_name}_step",
                 )
-
-        # Initialize metrics
-        train_dataloader = DataLoader(
-            self.dataset_dict["train"],  # type: ignore - interface compatibility
-            batch_size=self.train_batch_size,
-            collate_fn=partial(
-                self.collate_fn,
-                tokenizer=self.tokenizer,
-                max_length=self.max_length,
-            ),
-            shuffle=self.shuffle,
-            num_workers=self.num_workers,
-        )
-
-        if self.log_wandb:
+            
             self.train_pred_table = wandb.Table(
                 columns=["epoch", "batch_id", "prediction", "ground_truth"]
             )
@@ -137,21 +144,38 @@ class Trainer:
                 "GT_Keywords",
                 "Pred_keywords",
             ] + ([] if self.double_task else ["Pred_text"])
-            self.val_pred_table = wandb.Table(columns=eval_cols)
+
+            self.val_pred_table  = wandb.Table(columns=eval_cols)
             self.test_pred_table = wandb.Table(columns=eval_cols)
 
+        # Define DataLoaders
+        train_dataloader = DataLoader(
+            self.dataset_dict["train"],  # type: ignore - interface compatibility
+            batch_size=self.train_batch_size,
+            collate_fn=partial(
+                self.collate_fn,
+                tokenizer=self.tokenizer,
+                max_length=self.max_length,
+            ),
+            shuffle=self.shuffle,
+            num_workers=self.num_workers,
+        )
+
         # Set model to training mode
-        self.model.train()
+        self.model.train() # type: ignore
+
         for epoch in range(self.max_epochs):
 
             self.log_fn(f"Epoch {epoch + 1}/{self.max_epochs}")
             loss_batches = []
+
             for batch_id, batch in enumerate(train_dataloader):
 
                 # Move batch to device
                 batch = {k: v.to(self.device) for k, v in batch.items()}
+
                 # Forward pass
-                outputs = self.model(**batch)
+                outputs = self.model(**batch) # type: ignore
                 loss = self.loss_fn(batch, outputs)
 
                 # Backward pass
@@ -162,8 +186,10 @@ class Trainer:
                 loss_batches.append(loss.item())
 
                 # Log
+
                 if batch_id % self.log_interval == 0:
                     if self.log_wandb:
+
                         wandb.log(
                             {
                                 "train/loss": loss.item(),
@@ -171,11 +197,18 @@ class Trainer:
                                 + batch_id,
                             }
                         )
+
                     self.log_fn(
                         f" > Training batch {batch_id}/{len(train_dataloader)} - Loss: {loss.item()}"
                     )
+                    
                 if batch_id % (self.log_interval * 5) == 0:
-                    self._print_eval_train(batch, outputs, epoch, batch_id)
+                    self._print_eval_train(
+                        batch=batch, 
+                        outputs=outputs,
+                        epoch=epoch, 
+                        batch_id=batch_id
+                    )
 
                 if (
                     self.debug_run
@@ -198,13 +231,21 @@ class Trainer:
             if self.debug_run:
                 break
 
+        # Log tables
         if self.log_wandb:
+
             wandb.log({"train/train_pred_table": self.train_pred_table})
             wandb.log({"val/val_pred_table": self.val_pred_table})
 
         self.log_fn("Training completed")
 
     def validation(self, epoch: int):
+        """
+        Perform validation on the validation dataset.
+
+        :param epoch: The current epoch.
+        """
+
         val_dataloader = DataLoader(
             self.dataset_dict["validation"],  # type: ignore - interface compatibility
             batch_size=self.val_batch_size,
@@ -219,6 +260,11 @@ class Trainer:
         self._common_eval(val_dataloader, "val", epoch=epoch)
 
     def test(self):
+        """
+        Perform testing on the test dataset and log the results.
+        """
+
+
         test_dataloader = DataLoader(
             self.dataset_dict["test"],  # type: ignore - interface compatibility
             batch_size=self.val_batch_size,
@@ -241,7 +287,9 @@ class Trainer:
         eval_type: Literal["val", "test"],
         epoch: Optional[int] = None,
     ):
+        """ Common evaluation function for validation and testing. """
 
+        # Check input
         assert eval_type in ["val", "test"]
         assert (
             epoch is not None
@@ -251,10 +299,12 @@ class Trainer:
         )
 
         self.model.eval()
+
         if eval_type == "val":
             self.log_fn("Starting Validation")
         else:
             self.log_fn("Starting Testing")
+
         self.log_fn(f" - Batch Size:  {self.val_batch_size}")
         self.log_fn(f" - Num Batches: {len(dataloader)}")
         self.log_fn(f" - Device:      {self.device}")
@@ -263,6 +313,7 @@ class Trainer:
 
             # Put batch on device
             batch = {k: v.to(self.device) for k, v in batch.items()}
+
             # Generate predicted tokens
             generated_tokens = self.model.generate(
                 batch["input_ids"],
@@ -270,6 +321,7 @@ class Trainer:
                 max_new_tokens=self.max_new_tokens,
             )
             labels = batch["labels"]
+
             # Replace -100 in the labels as we can't decode them
             labels[labels < 0] = self.tokenizer.pad_token_id
             if isinstance(generated_tokens, tuple):
@@ -280,11 +332,13 @@ class Trainer:
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False,
             )
+
             decoded_labels = self.tokenizer.batch_decode(
                 labels,
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False,
             )
+
             decoded_preds, decoded_labels = postprocess_validation_text(
                 decoded_preds, decoded_labels
             )
@@ -315,8 +369,7 @@ class Trainer:
             self.evaluator.add_batch_keywords(predicted=pred_binary, target=ref_binary)
 
             if i % self.log_interval == 0:
-                # TODO REMOVE
-                # if i % 2 == 0:
+                
                 self.log_fn(f"Batch {i} completed")
                 if self.log_wandb:
                     table = (
@@ -375,6 +428,15 @@ class Trainer:
 
     @torch.no_grad()
     def _print_eval_train(self, batch, outputs, epoch, batch_id):
+        """
+        Log the evaluation of the training batch.
+
+        :param batch: The batch of data.
+        :param outputs: The model outputs.
+        :param epoch: The current epoch.
+        :param batch_id: The current batch id.
+        """
+
         self.model.eval()
         if "logits" in outputs:
             # For seq2seq models like T5, the logits usually correspond to decoder outputs
@@ -424,15 +486,18 @@ class Trainer:
     def save(self, save_directory: str):
         """
         Save the model and tokenizer to the specified directory.
-        Args:
-            save_directory (str): The directory where the model and tokenizer will be saved.
+        
+        :param save_directory (str): The directory where the model and tokenizer will be saved.
         """
+
         if not os.path.exists(save_directory):
             os.makedirs(save_directory)
+
         # Save model
         model_save_path = os.path.join(save_directory, "model")
         self.model.save_pretrained(model_save_path)
         print(f"Model saved to {model_save_path}")
+        
         # Save tokenizer
         tokenizer_save_path = os.path.join(save_directory, "tokenizer")
         self.tokenizer.save_pretrained(tokenizer_save_path)
@@ -442,8 +507,7 @@ class Trainer:
         """
         Load the model and tokenizer from the specified directory.
 
-        Args:
-            load_directory (str): The directory where the model and tokenizer are stored.
+        :param load_directory: The directory where the model and tokenizer are stored.
         """
         model_load_path = os.path.join(load_directory, "model")
         tokenizer_load_path = os.path.join(load_directory, "tokenizer")
@@ -454,7 +518,7 @@ class Trainer:
                 f"Model or tokenizer path does not exist at {load_directory}"
             )
         # Load model
-        self.model = self.model.from_pretrained(model_load_path)
+        self.model = self.model.from_pretrained(model_load_path) # type: ignore
         print(f"Model loaded from {model_load_path}")
         # Load tokenizer
         self.tokenizer = self.tokenizer.from_pretrained(tokenizer_load_path)
