@@ -5,6 +5,7 @@ This script serves as a GUI to explore TitleQuill
 import os
 import pathlib
 import base64
+import platform
 import subprocess, tempfile
 from typing import Dict
 
@@ -46,6 +47,13 @@ def get_available_models() -> list[str]:
 
 def generate_pdf(abstract: str, title: str, keywords: str):
 
+    match platform.system():
+
+        case "Windows": newline = f'\\\\'
+        case "Linux":   newline = r'\\\\'
+        case "Darwin":  newline = r'\\\\'
+        case _:         newline = ''
+
     TEMPLATE = f"""
     \\documentclass[12pt]{{article}}
     \\usepackage[utf8]{{inputenc}}
@@ -63,12 +71,11 @@ def generate_pdf(abstract: str, title: str, keywords: str):
     \\section*{{Abstract}}
     \\noindent
     {abstract}
-    \\\\
+    """ + newline + f"""
 
     \\vspace{{0.5cm}}
     \\noindent
     \\small{{\\textbf{{Keywords:}} {keywords}}}
-
 
     \\end{{document}}
     """
