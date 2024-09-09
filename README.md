@@ -8,6 +8,11 @@
 
 </div>
 
+<div align="center">
+  <img src="assets/pipeline.png" alt="Alt text">
+</div>
+
+
 ## Description
 This repository contains the implementation of TitleQuill, a novel approach for keyword extraction and title generation, reinterpreted as two forms of summarization. The project leverages the Flan-T5 model, fine-tuned using two distinct strategies: simultaneous training on both tasks and divided task training with combined losses. The approach is built on the T5 idea, framing both tasks as text-to-text transformations, enabling the use of a single model for both. The repository includes scripts for model training, data preparation, and evaluation, along with pre-trained model checkpoints and instructions for reproducing the experiments.
 
