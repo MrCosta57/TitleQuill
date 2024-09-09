@@ -31,7 +31,7 @@ from transformers import (
     PreTrainedTokenizerBase,
     PreTrainedTokenizer,
 )
-from src.utils.general_utils import split_keywords_by_comma
+from utils.general_utils import split_keywords_by_comma
 
 
 @dataclass
