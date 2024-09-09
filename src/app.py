@@ -18,13 +18,9 @@ from transformers import (
     PreTrainedTokenizerFast,
 )
 
-from utils.evaluator import Evaluator
+from utils.evaluator import Evaluator, split_keywords_by_comma
 
 MODEL_DIR = "output"
-
-MODEL_DOUBLE_TASK: Dict[str, bool] = {
-    "combined_tasks_10": False,
-}
 
 
 def get_num_devices() -> int:
@@ -49,12 +45,17 @@ def generate_pdf(abstract: str, title: str, keywords: str):
 
     match platform.system():
 
-        case "Windows": newline = f'\\\\'
-        case "Linux":   newline = r'\\\\'
-        case "Darwin":  newline = r'\\\\'
-        case _:         newline = ''
+        case "Windows":
+            newline = f"\\\\"
+        case "Linux":
+            newline = r"\\\\"
+        case "Darwin":
+            newline = r"\\\\"
+        case _:
+            newline = ""
 
-    TEMPLATE = f"""
+    TEMPLATE = (
+        f"""
     \\documentclass[12pt]{{article}}
     \\usepackage[utf8]{{inputenc}}
     \\usepackage{{amsmath}}
@@ -71,7 +72,9 @@ def generate_pdf(abstract: str, title: str, keywords: str):
     \\section*{{Abstract}}
     \\noindent
     {abstract}
-    """ + newline + f"""
+    """
+        + newline
+        + f"""
 
     \\vspace{{0.5cm}}
     \\noindent
@@ -79,6 +82,7 @@ def generate_pdf(abstract: str, title: str, keywords: str):
 
     \\end{{document}}
     """
+    )
 
     pdf_data = ""
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -256,25 +260,26 @@ if (
         with st.spinner("Generating... ✨"):
             with torch.inference_mode():
                 # Double task
-                if MODEL_DOUBLE_TASK[model_options]:
+                if "divided" in model_options:
                     pred = {}
 
                     for prefix, target in [
-                        ("generate title", "Title"),
-                        ("generate keywords", "Keywords"),
+                        ("Generate title", "Title"),
+                        ("Generate keywords", "Keywords"),
                     ]:
                         prefix_abstract = f"{prefix}: {abstract_input}"
                         pred[target] = prediction(
                             model, tokenizer, prefix_abstract, device
                         )
 
+                    pred["Keywords"] = set(split_keywords_by_comma(pred["Keywords"]))
                     st.session_state["title"], st.session_state["keywords"] = (
                         pred["Title"],
                         pred["Keywords"],
                     )
                 # Single task
                 else:
-                    prefix_abstract = f"generate title and keywords: {abstract_input}"
+                    prefix_abstract = f"Generate title and keywords: {abstract_input}"
                     generated_text = prediction(
                         model, tokenizer, prefix_abstract, device
                     )
