@@ -14,22 +14,51 @@
 
 
 ## Description
-This repository contains the implementation of TitleQuill, a novel approach for keyword extraction and title generation, reinterpreted as two forms of summarization. The project leverages the Flan-T5 model, fine-tuned using two distinct strategies: simultaneous training on both tasks and divided task training with combined losses. The approach is built on the T5 idea, framing both tasks as text-to-text transformations, enabling the use of a single model for both. The repository includes scripts for model training, data preparation, and evaluation, along with pre-trained model checkpoints and instructions for reproducing the experiments.
 
-## Installation
+This repository contains the implementation of TitleQuill, a novel approach for keyword extraction and title generation, reinterpreted as two forms of summarization. The project leverages the Flan-T5 model, fine-tuned using two distinct strategies: simultaneous training on both tasks and divided task training with combined losses. The approach is built on the T5 idea, framing both tasks as text-to-text transformations, enabling the use of a single model for both. The repository includes scripts for model training, data preparation, and evaluation, along with pre-trained model checkpoints and instructions for reproducing the experiments
+
+## Some examples
+
+| **Original Title** | **Generated Title** | **Generated Keywords** |
+|----------------|-----------------|--------------------|
+| Efficient Estimation of Word Representations in Vector Space | A novel model for computing continuous vector representations of words from large data sets | neural networks |
+| Adam: A Method for Stochastic Optimization | An algorithm for first-order gradient-based optimization of stochastic objective functions | convex optimization, gradient-based optimization, optimal convergence, first-order optimization |
+| BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding | A new language representation model for deep bidirectional representations from transformers |  bidirectional representation, transformers, language representation, language representation model |
+| Improving Language Understanding by Generative Pre-Training | Generative pre-training of a language model for natural language understanding | task-agnostic model, natural language, fine-tuning, task-aware input transformations |
+
+## Deployment
+
+Only CPU inference is supported in the Docker container
+
+1. Build the Docker image
+   ```sh
+   docker build -t titlequill .
+   ```
+
+1. Run the Docker container
+   ```sh
+   docker run -p 8501:8501 titlequill
+   ```
+
+1. Open the browser and go to `http://localhost:8501`
+
+
+## Development
+
+### Installation
 ```bash
 # [OPTIONAL] Create conda environment
 conda create -n myenv python=3.11
 conda activate myenv
 
-# Install pytorch according to instructions
-# https://pytorch.org/get-started/
-
 # Install requirements
-pip install -r requirements.txt
+# CPU
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# CUDA
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
 ```
 
-## Download data
+### Download data
 
 Using the following command is possible to download the dataset used in the project. The script apply also a post-processing to the files, changing the extension from `.txt` to `.jsonl` adjust their names properly.
 
@@ -51,7 +80,7 @@ python src/datamodule/download.py
 </details>
 
 
-## Data statistics
+### Data statistics
 
 The statistics about the dataset can be obtained using the following command:
 ```bash
@@ -68,24 +97,18 @@ python src/datamodule/stats.py
 </details>
 
 
-
-## Model weights
-
-The models weights can be obtained from this [link](https://drive.google.com/drive/folders/1yVKkDVj1UrwRl_EAPzG9yUr4zOoRRdjO?usp=drive_link). Please place the entire folder containing model and tokenizer in the `output/` directory.
-
-
-## How to run
+### How to run
 
 All the scripts can be configured by modifying the configuration files in the [configs/](configs/) directory. The configuration files are written in YAML format. The scripts parameters can be overridden from the command line.
 
 The configuration files are validated using Hydra, a powerful configuration management tool. For more information about Hydra, please refer to the official [documentation](https://hydra.cc/docs/intro/)
 
-### Training TitleQuill
+#### Training TitleQuill
 ```bash
 python src/run_titlequill.py
 ```
 
-### Other scripts
+#### Other scripts
 
 - Baseline
 ```bash
@@ -100,14 +123,19 @@ python src/run_qwen2.py
 python src/run_textrank.py
 ```
 
-
-## Demo
+### Demo
 
 The project includes a Streamlit GUI for the TitleQuill model. To run the GUI, execute the following command:
 ```bash
 # Activate your environment
 streamlit run src/app.py
 ```
+
+
+## Model weights
+
+The models weights can be obtained from this [link](https://drive.google.com/drive/folders/1yVKkDVj1UrwRl_EAPzG9yUr4zOoRRdjO?usp=drive_link). Please place the entire folder containing model and tokenizer in the `output/` directory.
+
 
 ## References
 

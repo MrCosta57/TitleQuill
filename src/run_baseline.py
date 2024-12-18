@@ -15,13 +15,13 @@ BASELINE_STRATEGIES = ["first_sentence", "with_more_kw"]
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="run")
 def main(cfg):
-    
+
     # Initialize
     setup_nltk()
     seed_everything(cfg.seed)
     cfg = OmegaConf.to_container(cfg, resolve=True)
     assert cfg is not None
-    if cfg.get("model") == None: # type: ignore
+    if cfg.get("model") == None:  # type: ignore
         conf = OmegaConf.load("configs/model/baseline.yaml")
         cfg["model"] = conf  # type: ignore
     cfg = DictConfig(cfg)
@@ -58,11 +58,9 @@ def main(cfg):
         metrics_title=cfg.metrics_title, metrics_keywords=cfg.metrics_keywords
     )
 
-
+    test_wandb_table = None
     # Wanb table and metrics
     if log_wandb:
-
-        test_wandb_table = None
 
         # Add metrics
         for metric_name in evaluator.get_metric_names:
