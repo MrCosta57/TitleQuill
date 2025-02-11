@@ -3,7 +3,7 @@ tqdm
 torch==2.4
 evaluate
 datasets==3.2
-transformers==4.47
+transformers==4.48.0
 accelerate==1.2
 nltk
 rouge_score
